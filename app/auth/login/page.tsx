@@ -16,7 +16,7 @@ export default function LoginPage() {
     setLoading('google')
     await sb.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: location.origin + '/api/auth/callback' }
+      options: { redirectTo: location.origin + '/auth/callback' }
     })
   }
 
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setLoading('kakao')
     await sb.auth.signInWithOAuth({
       provider: 'kakao',
-      options: { redirectTo: location.origin + '/api/auth/callback' }
+      options: { redirectTo: location.origin + '/auth/callback' }
     })
   }
 
@@ -33,7 +33,7 @@ export default function LoginPage() {
     setLoading('email')
     const { error } = await sb.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: location.origin + '/api/auth/callback' }
+      options: { emailRedirectTo: location.origin + '/auth/callback' }
     })
     setLoading('')
     if (error) alert('오류: ' + error.message)
