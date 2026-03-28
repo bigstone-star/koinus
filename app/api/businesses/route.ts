@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServer } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const sort = searchParams.get('sort') || 'rating'
 
-  const supabase = await createServer()
+  const supabase = createAdminClient()
   let q = supabase.from('businesses').select('*').eq('is_active', true)
   if (category && category !== '전체') q = q.eq('category_main', category)
   if (search) q = q.or(`name_en.ilike.%${search}%,name_kr.ilike.%${search}%`)

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServer } from '@/lib/supabase'
+import { createBrowser, createAdminClient } from '@/lib/supabase'
 import { createCheckoutSession } from '@/lib/stripe'
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServer()
+  const supabase = createBrowser()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const { data: business } = await supabase
+  const admin = createAdminClient()
+  const { data: business } = await admin
     .from('businesses')
     .select('id, owner_id')
     .eq('id', businessId)
