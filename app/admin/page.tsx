@@ -618,25 +618,39 @@ export default function AdminPage() {
                         <span className="bg-slate-100 px-1.5 py-0.5 rounded font-medium">{b.category_main}</span>
                         {b.phone && <span className="ml-2">{b.phone}</span>}
                       </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {!b.approved && (
-                          <button onClick={() => approve(b.id)} className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg">
-                            ✅ 승인
-                          </button>
-                        )}
-                        <button
-                          onClick={() => toggleVip(b)}
-                          className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${b.is_vip ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}
-                        >
-                          {b.is_vip ? 'VIP 해제' : '⭐ VIP'}
-                        </button>
-                        <button
-                          onClick={() => deactivate(b.id)}
-                          className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-slate-100 text-slate-500"
-                        >
-                          🗑
-                        </button>
-                      </div>
+                   <div className="flex gap-2 flex-wrap">
+  {!b.approved && (
+    <button
+      onClick={() => approve(b.id)}
+      className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg"
+    >
+      ✅ 승인
+    </button>
+  )}
+
+  <a
+    href={`/admin/businesses/${b.id}`}
+    className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-indigo-50 text-indigo-600"
+  >
+    ✏️ 수정
+  </a>
+
+  <button
+    onClick={() => toggleVip(b)}
+    className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${
+      b.is_vip ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+    }`}
+  >
+    {b.is_vip ? 'VIP 해제' : '⭐ VIP'}
+  </button>
+
+  <button
+    onClick={() => deactivate(b.id)}
+    className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-slate-100 text-slate-500"
+  >
+    🗑
+  </button>
+</div>
                     </div>
                   </div>
                 </div>
