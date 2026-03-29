@@ -84,29 +84,26 @@ export default function Home() {
         setCats([allCat, ...(data || [])])
       })
 
-    sb.from('banners')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error || !data) return
+sb.from('banners')
+  .select('*')
+  .eq('is_active', true)
+  .order('created_at', { ascending: false })
+  .then(({ data, error }) => {
+    console.log('banners error:', error)
+    console.log('banners data:', data)
 
-        const now = new Date()
+    if (error || !data) return
 
-        const valid = data.filter((b: any) => {
-          if (!b.expires_at) return true
-          return new Date(b.expires_at) > now
-        })
+    const bottom = data.filter(
+      (b: any) =>
+        b.position === 'home_bottom' ||
+        b.position === 'bottom' ||
+        b.position === 'footer'
+    )
 
-        const bottom = valid.filter(
-          (b: any) =>
-            b.position === 'home_bottom' ||
-            b.position === 'bottom' ||
-            b.position === 'footer'
-        )
-
-        setBottomBanners(bottom)
-      })
+    console.log('bottom banners:', bottom)
+    setBottomBanners(bottom)
+  })
 
     return () => subscription.unsubscribe()
   }, [])
