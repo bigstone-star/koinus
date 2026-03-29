@@ -11,118 +11,88 @@ const sb = createClient(
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
-  const sig = req.headers.get('stripe-signature')
-
-  if (!sig) {
-    return NextResponse.json({ error: 'No signature' }, { status: 400 })
-  }
+  const sig = req.headers.get('stripe-signature')!
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    )
+    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
   } catch (err: any) {
     console.error('Webhook signature error:', err.message)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
-  const session = event.data.object as any
-  const meta = session.metadata || {}
-  const { businessId, userId, tier, billing } = meta
+  const obj = event.data.object as any
+  const meta = obj.metadata || {}
+  const { businessId, userId, tier } = meta
 
   try {
-    // 1. 체크아웃 완료 (무료체험 시작)
+    // 1. 체크아웃 완료 - 14일 무료체험 시작
     if (event.type === 'checkout.session.completed') {
-      const periodEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
-
+      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
       await sb.from('subscriptions').upsert({
         business_id: businessId,
         user_id: userId,
-        stripe_subscription_id: session.subscription,
-        stripe_customer_id: session.customer,
+        stripe_subscription_id: obj.subscription,
+        stripe_customer_id: obj.customer,
         tier: tier,
         status: 'trialing',
-        current_period_end: periodEnd,
+        current_period_end: trialEnd.toISOString(),
         amount: tier === 'basic' ? 2900 : tier === 'pro' ? 4900 : 7900,
-        updated_at: new Date().toISOString(),
       }, { onConflict: 'business_id' })
-
-      // 업소 VIP 상태 ON
       await sb.from('businesses').update({
-        is_vip: true,
-        vip_tier: tier,
+        is_vip: true, vip_tier: tier, vip_expires_at: trialEnd.toISOString(),
       }).eq('id', businessId)
-
-      console.log('Checkout completed:', businessId, tier)
     }
 
-    // 2. 결제 성공 (무료체험 종료 후 실제 결제)
+    // 2. 정기 결제 성공
     if (event.type === 'invoice.payment_succeeded') {
-      const subId = session.subscription
-      if (!subId) return NextResponse.json({ received: true })
-
-      const sub = await stripe.subscriptions.retrieve(subId)
-      const subMeta = sub.metadata || {}
-
-      await sb.from('subscriptions').update({
-        status: 'active',
-        current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('stripe_subscription_id', subId)
-
-      // 업소 VIP 유지 확인
-      if (subMeta.businessId) {
-        await sb.from('businesses').update({ is_vip: true }).eq('id', subMeta.businessId)
+      const subId = obj.subscription
+      if (subId) {
+        const sub = await stripe.subscriptions.retrieve(subId)
+        const periodEnd = new Date(sub.current_period_end * 1000)
+        const bizId = sub.metadata?.businessId || businessId
+        await sb.from('subscriptions').update({
+          status: 'active', current_period_end: periodEnd.toISOString(),
+        }).eq('stripe_subscription_id', subId)
+        await sb.from('businesses').update({
+          is_vip: true, vip_expires_at: periodEnd.toISOString(),
+        }).eq('id', bizId)
       }
-
-      console.log('Payment succeeded:', subId)
     }
 
     // 3. 결제 실패
     if (event.type === 'invoice.payment_failed') {
-      const subId = session.subscription
-      if (!subId) return NextResponse.json({ received: true })
-
-      await sb.from('subscriptions').update({
-        status: 'past_due',
-        updated_at: new Date().toISOString(),
-      }).eq('stripe_subscription_id', subId)
-
-      console.log('Payment failed:', subId)
+      const subId = obj.subscription
+      if (subId) {
+        await sb.from('subscriptions').update({ status: 'past_due' })
+          .eq('stripe_subscription_id', subId)
+      }
     }
 
     // 4. 구독 취소
     if (event.type === 'customer.subscription.deleted') {
-      const subId = session.id
-      const subMeta = session.metadata || {}
-
-      await sb.from('subscriptions').update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString(),
-      }).eq('stripe_subscription_id', subId)
-
-      // 업소 VIP 해제
-      if (subMeta.businessId) {
-        await sb.from('businesses').update({
-          is_vip: false,
-          vip_tier: null,
-        }).eq('id', subMeta.businessId)
-      }
-
-      console.log('Subscription cancelled:', subId)
+      const bizId = obj.metadata?.businessId || businessId
+      await sb.from('subscriptions').update({ status: 'cancelled' })
+        .eq('stripe_subscription_id', obj.id)
+      await sb.from('businesses').update({
+        is_vip: false, vip_tier: null, vip_expires_at: null,
+      }).eq('id', bizId)
     }
 
-    // 5. 무료체험 종료 알림 (3일 전)
-    if (event.type === 'customer.subscription.trial_will_end') {
-      // 향후 이메일 알림 추가 가능
-      console.log('Trial ending soon:', session.id)
+    // 5. 플랜 변경
+    if (event.type === 'customer.subscription.updated') {
+      const newTier = obj.metadata?.tier
+      const bizId = obj.metadata?.businessId || businessId
+      const status = obj.status === 'trialing' ? 'trialing' : obj.status === 'active' ? 'active' : 'past_due'
+      await sb.from('subscriptions').update({ status, tier: newTier })
+        .eq('stripe_subscription_id', obj.id)
+      if (newTier) {
+        await sb.from('businesses').update({ vip_tier: newTier }).eq('id', bizId)
+      }
     }
 
   } catch (err: any) {
-    console.error('Webhook handler error:', err)
+    console.error('Webhook error:', err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 
