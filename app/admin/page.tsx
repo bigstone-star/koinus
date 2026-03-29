@@ -13,6 +13,7 @@ type DashboardStats = {
   vipBusinesses: number
   pendingBusinesses: number
   pendingClaims: number
+  pendingEdits: number
   activeBanners: number
 }
 
@@ -24,6 +25,7 @@ export default function AdminPage() {
     vipBusinesses: 0,
     pendingBusinesses: 0,
     pendingClaims: 0,
+    pendingEdits: 0,
     activeBanners: 0,
   })
   const [recentBusinesses, setRecentBusinesses] = useState<any[]>([])
@@ -73,6 +75,7 @@ export default function AdminPage() {
         vipBusinessesRes,
         pendingBusinessesRes,
         pendingClaimsRes,
+        pendingEditsRes,
         activeBannersRes,
         recentBusinessesRes,
       ] = await Promise.all([
@@ -99,6 +102,11 @@ export default function AdminPage() {
           .eq('status', 'pending'),
 
         sb
+          .from('business_edits')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+
+        sb
           .from('banners')
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true),
@@ -116,6 +124,7 @@ export default function AdminPage() {
         vipBusinesses: vipBusinessesRes.count || 0,
         pendingBusinesses: pendingBusinessesRes.count || 0,
         pendingClaims: pendingClaimsRes.count || 0,
+        pendingEdits: pendingEditsRes.count || 0,
         activeBanners: activeBannersRes.count || 0,
       })
 
@@ -175,6 +184,12 @@ export default function AdminPage() {
       desc: '기존 업소 소유권 승인/반려',
     },
     {
+      href: '/admin/edits',
+      icon: '✏️',
+      title: '업소 수정 요청 관리',
+      desc: '업주가 보낸 수정 요청 승인/반려',
+    },
+    {
       href: '/',
       icon: '🏠',
       title: '사이트 보기',
@@ -194,6 +209,12 @@ export default function AdminPage() {
       value: stats.pendingClaims,
       color: 'text-indigo-600',
       href: '/admin/claims',
+    },
+    {
+      label: '수정 요청 대기',
+      value: stats.pendingEdits,
+      color: 'text-violet-600',
+      href: '/admin/edits',
     },
     {
       label: '활성 배너',
@@ -224,6 +245,16 @@ export default function AdminPage() {
       value: stats.pendingClaims,
       color: 'text-indigo-600',
     },
+    {
+      label: '수정 요청 대기',
+      value: stats.pendingEdits,
+      color: 'text-violet-600',
+    },
+    {
+      label: '활성 배너',
+      value: stats.activeBanners,
+      color: 'text-amber-600',
+    },
   ]
 
   return (
@@ -232,10 +263,18 @@ export default function AdminPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-[24px] font-extrabold text-white">🛠 관리자 대시보드</h1>
-            <p className="text-white/40 text-[12px] mt-1">교차로 휴스턴 운영 현황과 빠른 관리 메뉴</p>
+            <p className="text-white/40 text-[12px] mt-1">
+              교차로 휴스턴 운영 현황과 빠른 관리 메뉴
+            </p>
           </div>
 
           <div className="flex gap-2 flex-wrap justify-end">
+            <a
+              href="/admin/businesses"
+              className="text-white/70 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
+            >
+              🏢 업소
+            </a>
             <a
               href="/admin/banners"
               className="text-white/70 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
@@ -249,6 +288,12 @@ export default function AdminPage() {
               🏷️ 소유권 요청
             </a>
             <a
+              href="/admin/edits"
+              className="text-white/70 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
+            >
+              ✏️ 수정 요청
+            </a>
+            <a
               href="/"
               className="text-white/70 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
             >
@@ -260,10 +305,15 @@ export default function AdminPage() {
 
       <div className="px-4 pt-4">
         <div className="text-[13px] font-bold text-slate-500 mb-3">운영 현황</div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {statCards.map((card) => (
-            <div key={card.label} className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-              <div className={`text-[24px] font-extrabold ${card.color}`}>{card.value}</div>
+            <div
+              key={card.label}
+              className="bg-white rounded-xl border border-slate-200 p-4 text-center"
+            >
+              <div className={`text-[24px] font-extrabold ${card.color}`}>
+                {card.value}
+              </div>
               <div className="text-[11px] text-slate-400 mt-1">{card.label}</div>
             </div>
           ))}
@@ -272,15 +322,19 @@ export default function AdminPage() {
 
       <div className="px-4 pt-6">
         <div className="text-[13px] font-bold text-slate-500 mb-3">지금 처리할 일</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {taskCards.map((task) => (
             <a
               key={task.label}
               href={task.href}
               className="bg-white rounded-xl border border-slate-200 p-4 hover:bg-slate-50"
             >
-              <div className={`text-[26px] font-extrabold ${task.color}`}>{task.value}</div>
-              <div className="text-[13px] font-bold text-slate-700 mt-1">{task.label}</div>
+              <div className={`text-[26px] font-extrabold ${task.color}`}>
+                {task.value}
+              </div>
+              <div className="text-[13px] font-bold text-slate-700 mt-1">
+                {task.label}
+              </div>
               <div className="text-[11px] text-slate-400 mt-1">바로 이동</div>
             </a>
           ))}
@@ -299,7 +353,9 @@ export default function AdminPage() {
               <div className="flex items-start gap-3">
                 <div className="text-2xl">{menu.icon}</div>
                 <div className="min-w-0">
-                  <div className="text-[14px] font-bold text-slate-800">{menu.title}</div>
+                  <div className="text-[14px] font-bold text-slate-800">
+                    {menu.title}
+                  </div>
                   <div className="text-[12px] text-slate-400 mt-1">{menu.desc}</div>
                 </div>
               </div>
