@@ -318,6 +318,7 @@ export default function AdminPage() {
           <p className="text-white/40 text-[12px] mt-0.5">교차로 휴스턴 운영 관리</p>
         </div>
         <a href="/admin/banners" className="text-white/40 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg">📢 배너</a>
+        <a href="/admin/banners" className="text-white/40 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg">📢 배너</a>
         <a href="/" className="text-white/40 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg">
           홈
         </a>
