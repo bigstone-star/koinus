@@ -8,119 +8,143 @@ const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function ClaimBusinessPage() {
-  const [user, setUser] = useState<any>(null)
+export default function AdminClaimsPage() {
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [results, setResults] = useState<any[]>([])
-  const [selected, setSelected] = useState<any>(null)
-
-  const [message, setMessage] = useState('')
-  const [proofText, setProofText] = useState('')
-  const [contactPhone, setContactPhone] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
-
-  const [saving, setSaving] = useState(false)
+  const [claims, setClaims] = useState<any[]>([])
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
     const init = async () => {
-      const { data } = await sb.auth.getUser()
-      if (!data.user) {
+      const { data: auth } = await sb.auth.getUser()
+      if (!auth.user) {
         window.location.href = '/auth/login'
         return
       }
-      setUser(data.user)
-      setContactEmail(data.user.email || '')
-      setLoading(false)
+
+      const { data: profile } = await sb
+        .from('user_profiles')
+        .select('role')
+        .eq('id', auth.user.id)
+        .maybeSingle()
+
+      if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+        window.location.href = '/'
+        return
+      }
+
+      await load()
     }
+
     init()
   }, [])
 
-  const searchBusinesses = async () => {
-    const term = search.trim()
-    if (!term) {
-      setResults([])
-      return
-    }
+  const load = async () => {
+    setLoading(true)
 
     const { data, error } = await sb
+      .from('business_claim_requests')
+      .select(`
+        *,
+        businesses (
+          id,
+          name_kr,
+          name_en,
+          category_main,
+          address,
+          phone,
+          owner_id
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setMsg('요청 목록을 불러오는 중 오류가 발생했습니다.')
+      setLoading(false)
+      return
+    }
+
+    setClaims(data || [])
+    setLoading(false)
+  }
+
+  const approveClaim = async (claim: any) => {
+    const business = claim.businesses
+    if (!business?.id || !claim.user_id) {
+      alert('요청 데이터가 올바르지 않습니다.')
+      return
+    }
+
+    if (!confirm('이 요청을 승인할까요?')) return
+
+    const { error: ownerError } = await sb
       .from('businesses')
-      .select('id, name_kr, name_en, category_main, address, phone, owner_id')
-      .eq('is_active', true)
-      .or(
-        `name_kr.ilike.%${term}%,name_en.ilike.%${term}%,phone.ilike.%${term}%,address.ilike.%${term}%`
-      )
-      .order('is_vip', { ascending: false })
-      .limit(20)
+      .update({ owner_id: claim.user_id })
+      .eq('id', business.id)
+
+    if (ownerError) {
+      alert('업소 owner 연결 실패: ' + ownerError.message)
+      return
+    }
+
+    const { error: claimError } = await sb
+      .from('business_claim_requests')
+      .update({
+        status: 'approved',
+        admin_note: '소유권 승인 완료',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', claim.id)
+
+    if (claimError) {
+      alert('요청 상태 업데이트 실패: ' + claimError.message)
+      return
+    }
+
+    setMsg('소유권 요청을 승인했습니다.')
+    setTimeout(() => setMsg(''), 3000)
+    load()
+  }
+
+  const rejectClaim = async (claim: any) => {
+    const note = window.prompt('반려 사유를 입력하세요.', claim.admin_note || '')
+    if (note === null) return
+
+    const { error } = await sb
+      .from('business_claim_requests')
+      .update({
+        status: 'rejected',
+        admin_note: note || '반려됨',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', claim.id)
 
     if (error) {
-      setMsg('검색 중 오류가 발생했습니다.')
+      alert('반려 처리 실패: ' + error.message)
       return
     }
 
-    setResults((data || []).filter((b: any) => !b.owner_id))
+    setMsg('소유권 요청을 반려했습니다.')
+    setTimeout(() => setMsg(''), 3000)
+    load()
   }
 
-  const submitClaim = async () => {
-    if (!user) return
-    if (!selected) {
-      setMsg('업소를 먼저 선택하세요.')
-      return
-    }
-
-    setSaving(true)
-    setMsg('')
-
-    const { error } = await sb.from('business_claim_requests').insert({
-      business_id: selected.id,
-      user_id: user.id,
-      message: message || null,
-      proof_text: proofText || null,
-      contact_phone: contactPhone || null,
-      contact_email: contactEmail || null,
-    })
-
-    setSaving(false)
-
-    if (error) {
-      setMsg('요청 저장 중 오류가 발생했습니다: ' + error.message)
-      return
-    }
-
-    setMsg('소유권 요청이 접수되었습니다. 관리자 확인 후 연결됩니다.')
-    setSelected(null)
-    setSearch('')
-    setResults([])
-    setMessage('')
-    setProofText('')
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  const fs =
-    'w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-indigo-400'
+  const pendingClaims = claims.filter((c) => c.status === 'pending')
+  const processedClaims = claims.filter((c) => c.status !== 'pending')
 
   return (
-    <div className="min-h-screen bg-slate-100 max-w-2xl mx-auto pb-10">
+    <div className="min-h-screen bg-slate-100 max-w-3xl mx-auto pb-10">
       <div className="bg-[#1a1a2e] px-5 pt-10 pb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-[20px] font-extrabold text-white">내 업소 찾기</h1>
+          <h1 className="text-[20px] font-extrabold text-white">업소 소유권 요청 관리</h1>
           <p className="text-white/40 text-[12px] mt-0.5">
-            기존 업소를 찾아 소유권을 요청하세요
+            기존 업소에 대한 업주 소유권 요청 승인 / 반려
           </p>
         </div>
         <a
-          href="/dashboard"
+          href="/admin"
           className="text-white/40 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
         >
-          대시보드
+          관리자
         </a>
       </div>
 
@@ -130,111 +154,131 @@ export default function ClaimBusinessPage() {
         </div>
       )}
 
-      <div className="mx-4 mt-4 bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <div className="text-[14px] font-bold text-slate-700">업소 검색</div>
-
-        <div className="flex gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && searchBusinesses()}
-            placeholder="업소명, 전화번호, 주소로 검색"
-            className={fs}
-          />
-          <button
-            onClick={searchBusinesses}
-            className="px-4 bg-indigo-600 text-white rounded-lg text-[13px] font-bold"
-          >
-            검색
-          </button>
+      <div className="px-4 mt-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="text-[14px] font-bold text-slate-700">
+            대기 요청 {pendingClaims.length}건
+          </div>
         </div>
+      </div>
 
-        {results.length > 0 && (
-          <div className="space-y-2 pt-2">
-            {results.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setSelected(b)}
-                className={`w-full text-left rounded-xl border p-3 ${
-                  selected?.id === b.id
-                    ? 'border-indigo-500 bg-indigo-50'
-                    : 'border-slate-200 bg-white'
-                }`}
-              >
-                <div className="font-bold text-[14px] text-slate-800">
-                  {b.name_kr || b.name_en}
+      <div className="px-4 mt-4 space-y-3">
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : pendingClaims.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
+            대기 중인 소유권 요청이 없습니다.
+          </div>
+        ) : (
+          pendingClaims.map((claim) => {
+            const business = claim.businesses
+            return (
+              <div key={claim.id} className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="text-[15px] font-extrabold text-slate-800">
+                      {business?.name_kr || business?.name_en || '이름 없음'}
+                    </div>
+                    {business?.category_main && (
+                      <div className="text-[12px] text-slate-400 mt-0.5">
+                        {business.category_main}
+                      </div>
+                    )}
+                  </div>
+
+                  <span className="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">
+                    대기중
+                  </span>
                 </div>
-                {b.category_main && (
-                  <div className="text-[12px] text-slate-400 mt-0.5">{b.category_main}</div>
-                )}
-                {b.phone && (
-                  <div className="text-[12px] text-slate-500 mt-1">📞 {b.phone}</div>
-                )}
-                {b.address && (
-                  <div className="text-[12px] text-slate-500 mt-0.5">📍 {b.address}</div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
 
-        {search.trim() && results.length === 0 && (
-          <div className="text-[13px] text-slate-400 pt-2">
-            검색 결과가 없거나 이미 소유자가 연결된 업소입니다.
-          </div>
+                <div className="space-y-1 text-[12px] text-slate-600 mb-3">
+                  {business?.phone && <div>📞 업소 전화: {business.phone}</div>}
+                  {business?.address && <div>📍 업소 주소: {business.address}</div>}
+                  {claim.contact_phone && <div>📱 요청자 연락처: {claim.contact_phone}</div>}
+                  {claim.contact_email && <div>✉️ 요청자 이메일: {claim.contact_email}</div>}
+                </div>
+
+                {claim.message && (
+                  <div className="mb-3 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-[11px] font-bold text-slate-400 mb-1">요청 메시지</div>
+                    <div className="text-[13px] text-slate-700">{claim.message}</div>
+                  </div>
+                )}
+
+                {claim.proof_text && (
+                  <div className="mb-3 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+                    <div className="text-[11px] font-bold text-indigo-400 mb-1">증빙 정보</div>
+                    <div className="text-[13px] text-slate-700 whitespace-pre-wrap">
+                      {claim.proof_text}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => approveClaim(claim)}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
+                  >
+                    승인
+                  </button>
+                  <button
+                    onClick={() => rejectClaim(claim)}
+                    className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-[13px] font-bold"
+                  >
+                    반려
+                  </button>
+                </div>
+              </div>
+            )
+          })
         )}
       </div>
 
-      <div className="mx-4 mt-4 bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <div className="text-[14px] font-bold text-slate-700">소유권 요청 정보</div>
+      <div className="px-4 mt-6">
+        <div className="text-[13px] font-bold text-slate-500 mb-3">처리 완료 요청</div>
+        <div className="space-y-3">
+          {processedClaims.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-400">
+              처리 완료된 요청이 없습니다.
+            </div>
+          ) : (
+            processedClaims.map((claim) => {
+              const business = claim.businesses
+              return (
+                <div key={claim.id} className="bg-white rounded-xl border border-slate-200 p-4 opacity-80">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[14px] font-bold text-slate-800">
+                        {business?.name_kr || business?.name_en || '이름 없음'}
+                      </div>
+                      <div className="text-[12px] text-slate-400 mt-0.5">
+                        요청자: {claim.contact_email || '이메일 없음'}
+                      </div>
+                    </div>
 
-        {selected ? (
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-3 text-[13px] text-slate-700">
-            선택한 업소: <span className="font-bold">{selected.name_kr || selected.name_en}</span>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[13px] text-slate-400">
-            아직 선택한 업소가 없습니다.
-          </div>
-        )}
+                    <span
+                      className={`text-[10px] font-black px-2 py-1 rounded-full ${
+                        claim.status === 'approved'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-600'
+                      }`}
+                    >
+                      {claim.status === 'approved' ? '승인됨' : '반려됨'}
+                    </span>
+                  </div>
 
-        <input
-          value={contactPhone}
-          onChange={(e) => setContactPhone(e.target.value)}
-          placeholder="연락 가능한 전화번호"
-          className={fs}
-        />
-
-        <input
-          value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
-          placeholder="연락 가능한 이메일"
-          className={fs}
-        />
-
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={3}
-          placeholder="간단한 요청 메시지 (예: 이 업소의 실제 운영자입니다)"
-          className={fs + ' resize-none'}
-        />
-
-        <textarea
-          value={proofText}
-          onChange={(e) => setProofText(e.target.value)}
-          rows={4}
-          placeholder="증빙 정보 (예: 사업자명, 웹사이트 관리자 이메일, 가게 전화로 확인 가능 등)"
-          className={fs + ' resize-none'}
-        />
-
-        <button
-          onClick={submitClaim}
-          disabled={saving || !selected}
-          className="w-full bg-indigo-600 text-white rounded-lg py-3 text-[14px] font-bold disabled:opacity-50"
-        >
-          {saving ? '요청 제출 중...' : '소유권 요청 보내기'}
-        </button>
+                  {claim.admin_note && (
+                    <div className="mt-3 text-[12px] text-slate-500">
+                      관리자 메모: {claim.admin_note}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
   )
