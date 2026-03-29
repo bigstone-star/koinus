@@ -212,8 +212,18 @@ const bottom = data.filter(
     style={{ maxWidth: `${headerLogoWidth}px` }}
   />
 ) : (
+{headerLogoUrl && !showTextLogo ? (
+  <img
+    src={headerLogoUrl}
+    alt={siteName}
+    className="h-8 w-auto"
+    style={{ maxWidth: `${headerLogoWidth}px` }}
+  />
+) : (
   <h1 className="text-[20px] font-extrabold text-white">
     <span className="text-amber-400">교차로</span> 휴스턴
+  </h1>
+)}
   </h1>
 )}
             </h1>
