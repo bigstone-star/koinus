@@ -10,8 +10,7 @@ const sb = createClient(
 
 type Category = {
   id: string
-  name?: string
-  name_ko?: string
+  name: string
   icon?: string
   sort_order?: number
   is_active?: boolean
@@ -35,7 +34,7 @@ export default function AdminPage() {
   const [bulkCat, setBulkCat] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
 
-  const getCatLabel = (c: Category) => c.name || c.name_ko || '이름없음'
+  const getCatLabel = (c: Category) => c.name || '이름없음'
 
   useEffect(() => {
     const init = async () => {
@@ -135,6 +134,7 @@ export default function AdminPage() {
   async function loadCats() {
     try {
       setCatLoading(true)
+
       const { data, error } = await sb
         .from('categories')
         .select('*')
@@ -226,26 +226,12 @@ export default function AdminPage() {
 
     const maxOrder = cats.length > 0 ? Math.max(...cats.map((c) => c.sort_order || 0)) : 0
 
-    const payload = {
+    const { error } = await sb.from('categories').insert({
       name: newCatName.trim(),
       icon: newCatIcon,
       sort_order: maxOrder + 1,
       is_active: true,
-    }
-
-    let { error } = await sb.from('categories').insert(payload)
-
-    if (error) {
-      const fallbackPayload = {
-        name_ko: newCatName.trim(),
-        icon: newCatIcon,
-        sort_order: maxOrder + 1,
-        is_active: true,
-      }
-
-      const retry = await sb.from('categories').insert(fallbackPayload)
-      error = retry.error
-    }
+    })
 
     if (error) {
       alert('추가 실패: ' + error.message)
@@ -536,7 +522,10 @@ export default function AdminPage() {
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         {!b.approved && (
-                          <button onClick={() => approve(b.id)} className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg">
+                          <button
+                            onClick={() => approve(b.id)}
+                            className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg"
+                          >
                             ✅ 승인
                           </button>
                         )}
