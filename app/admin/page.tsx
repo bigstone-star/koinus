@@ -8,6 +8,8 @@ const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+const ICON_OPTIONS = ['🍽️', '🛒', '🏥', '🦷', '⚖️', '🚗', '💄', '📚', '💳', '⛪', '🏠', '🧺', '🌿', '✈️', '📰', '👓', '📋']
+
 type Category = {
   id: string
   name: string
@@ -362,20 +364,43 @@ export default function AdminPage() {
         <div className="px-4 space-y-3">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="text-[13px] font-bold text-slate-700 mb-3">새 카테고리 추가</div>
-            <div className="flex gap-2">
-              <input
-                value={newCatIcon}
-                onChange={(e) => setNewCatIcon(e.target.value)}
-                placeholder="아이콘"
-                className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px]"
-              />
-              <input
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                placeholder="카테고리 이름"
-                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
-                onKeyDown={(e: any) => e.key === 'Enter' && addCat()}
-              />
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">아이콘</label>
+                <input
+                  value={newCatIcon}
+                  onChange={(e) => setNewCatIcon(e.target.value)}
+                  placeholder="아이콘"
+                  className="w-20 border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px] mb-2"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {ICON_OPTIONS.map((icon) => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => setNewCatIcon(icon)}
+                      className={`w-9 h-9 rounded-lg border text-[18px] ${
+                        newCatIcon === icon ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">이름</label>
+                <input
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="카테고리 이름"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                  onKeyDown={(e: any) => e.key === 'Enter' && addCat()}
+                />
+              </div>
+
               <button
                 onClick={addCat}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
@@ -394,17 +419,31 @@ export default function AdminPage() {
           ) : (
             cats.map((c) => (
               <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="grid grid-cols-12 gap-3 items-center">
-                  <div className="col-span-2">
+                <div className="grid grid-cols-12 gap-3 items-start">
+                  <div className="col-span-12 md:col-span-3">
                     <label className="text-[11px] text-slate-400 block mb-1">아이콘</label>
                     <input
                       value={c.icon || ''}
                       onChange={(e) => updateCatField(c.id, 'icon', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px]"
+                      className="w-full border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px] mb-2"
                     />
+                    <div className="flex flex-wrap gap-1">
+                      {ICON_OPTIONS.map((icon) => (
+                        <button
+                          key={icon}
+                          type="button"
+                          onClick={() => updateCatField(c.id, 'icon', icon)}
+                          className={`w-9 h-9 rounded-lg border text-[18px] ${
+                            c.icon === icon ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'
+                          }`}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="col-span-5">
+                  <div className="col-span-12 md:col-span-5">
                     <label className="text-[11px] text-slate-400 block mb-1">이름</label>
                     <input
                       value={c.name || ''}
@@ -413,7 +452,7 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  <div className="col-span-2">
+                  <div className="col-span-6 md:col-span-2">
                     <label className="text-[11px] text-slate-400 block mb-1">순서</label>
                     <input
                       type="number"
@@ -423,7 +462,7 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  <div className="col-span-3">
+                  <div className="col-span-6 md:col-span-2">
                     <label className="text-[11px] text-slate-400 block mb-1">상태</label>
                     <div className="text-[12px] font-bold text-slate-600 py-2">
                       {c.is_active ? '표시중' : '숨김'}
