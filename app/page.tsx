@@ -42,6 +42,8 @@ export default function Home() {
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [user, setUser] = useState<any>(null)
   const [cats, setCats] = useState<Category[]>([])
+  const [bottomBanners, setBottomBanners] = useState<any[]>([])
+  const [bottomBannerIndex, setBottomBannerIndex] = useState(0)
 
   const SORTS = ['rating', 'review_count', 'name_en']
   const SORT_LABELS: Record<string, string> = {
@@ -82,8 +84,42 @@ export default function Home() {
         setCats([allCat, ...(data || [])])
       })
 
+    sb.from('banners')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error || !data) return
+
+        const now = new Date()
+
+        const valid = data.filter((b: any) => {
+          if (!b.expires_at) return true
+          return new Date(b.expires_at) > now
+        })
+
+        const bottom = valid.filter(
+          (b: any) =>
+            b.position === 'home_bottom' ||
+            b.position === 'bottom' ||
+            b.position === 'footer'
+        )
+
+        setBottomBanners(bottom)
+      })
+
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (bottomBanners.length <= 1) return
+
+    const timer = setInterval(() => {
+      setBottomBannerIndex((prev) => (prev + 1) % bottomBanners.length)
+    }, 4000)
+
+    return () => clearInterval(timer)
+  }, [bottomBanners])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -135,6 +171,9 @@ export default function Home() {
     setUser(null)
     window.location.href = '/'
   }
+
+  const currentBottomBanner =
+    bottomBanners.length > 0 ? bottomBanners[bottomBannerIndex] : null
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
@@ -245,7 +284,7 @@ export default function Home() {
         )}
       </div>
 
-      <main className="px-3 py-2.5 pb-24 space-y-2">
+      <main className="px-3 py-2.5 pb-44 space-y-2">
         {!user && (
           <a
             href="/auth/login"
@@ -266,9 +305,11 @@ export default function Home() {
           <div className="text-center py-20 text-slate-400">검색 결과가 없습니다</div>
         ) : (
           biz.map((b) => {
-            const catInfo = cats.find((c) => c.name === b.category_main) || cats[cats.length - 1]
+            const catInfo =
+              cats.find((c) => c.name === b.category_main) || cats[cats.length - 1]
             const isFav = favs.includes(b.id)
-            const addr = b.address?.split(',').slice(0, -2).join(',').trim() || b.address
+            const addr =
+              b.address?.split(',').slice(0, -2).join(',').trim() || b.address
 
             return (
               <div
@@ -306,7 +347,9 @@ export default function Home() {
                     {b.name_kr || b.name_en}
                   </div>
 
-                  {addr && <div className="text-[12px] text-slate-500 truncate mt-0.5">{addr}</div>}
+                  {addr && (
+                    <div className="text-[12px] text-slate-500 truncate mt-0.5">{addr}</div>
+                  )}
 
                   <div className="flex items-center gap-2.5 mt-1">
                     {b.rating > 0 && (
@@ -342,7 +385,12 @@ export default function Home() {
           { href: '/', icon: '🏠', label: '홈', active: true },
           { href: '/register', icon: '➕', label: '업소등록', active: false },
           { href: '/pricing', icon: '⭐', label: 'VIP', active: false },
-          { href: user ? '/dashboard' : '/auth/login', icon: '👤', label: user ? '내정보' : '로그인', active: false },
+          {
+            href: user ? '/dashboard' : '/auth/login',
+            icon: '👤',
+            label: user ? '내정보' : '로그인',
+            active: false,
+          },
         ].map((item) => (
           <a
             key={item.href}
@@ -418,7 +466,10 @@ export default function Home() {
                   <span>📞</span>
                   <div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">전화</div>
-                    <a href={'tel:' + sel.phone} className="text-[14px] font-semibold text-indigo-600">
+                    <a
+                      href={'tel:' + sel.phone}
+                      className="text-[14px] font-semibold text-indigo-600"
+                    >
                       {sel.phone}
                     </a>
                   </div>
@@ -429,7 +480,9 @@ export default function Home() {
                 <div className="flex gap-3 py-2">
                   <span>🌐</span>
                   <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">웹사이트</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      웹사이트
+                    </div>
                     <a
                       href={sel.website}
                       target="_blank"
@@ -465,6 +518,36 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {currentBottomBanner && (
+        <div className="fixed bottom-16 left-0 right-0 max-w-lg mx-auto z-40 px-3">
+          <a
+            href={currentBottomBanner.link_url || '#'}
+            target="_blank"
+            rel="noreferrer"
+            className="block rounded-xl overflow-hidden shadow-lg border border-slate-200 bg-white"
+          >
+            {currentBottomBanner.image_url ? (
+              <img
+                src={currentBottomBanner.image_url}
+                alt={currentBottomBanner.title || '배너'}
+                className="w-full h-20 object-cover"
+              />
+            ) : (
+              <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
+                <div className="text-[14px] font-extrabold">
+                  {currentBottomBanner.title || '광고 배너'}
+                </div>
+                {currentBottomBanner.subtitle && (
+                  <div className="text-[12px] text-white/80 mt-0.5">
+                    {currentBottomBanner.subtitle}
+                  </div>
+                )}
+              </div>
+            )}
+          </a>
         </div>
       )}
 
