@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT, name TEXT, phone TEXT, avatar_url TEXT,
-  role TEXT DEFAULT 'user' CHECK (role IN ('user','business_owner','admin')),
+    role TEXT DEFAULT 'user' CHECK (role IN ('user','business_owner','admin','super_admin')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
