@@ -28,6 +28,7 @@ export default function AdminPage() {
   const [newCatName, setNewCatName] = useState('')
   const [newCatIcon, setNewCatIcon] = useState('📋')
   const [catLoading, setCatLoading] = useState(false)
+  const [savingCatId, setSavingCatId] = useState('')
 
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -243,6 +244,38 @@ export default function AdminPage() {
     loadCats()
   }
 
+  const updateCatField = (id: string, field: keyof Category, value: any) => {
+    setCats((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
+    )
+  }
+
+  const saveCat = async (cat: Category) => {
+    if (!cat.name?.trim()) return alert('카테고리 이름을 입력하세요')
+
+    setSavingCatId(cat.id)
+
+    const { error } = await sb
+      .from('categories')
+      .update({
+        name: cat.name.trim(),
+        icon: cat.icon || '📋',
+        sort_order: Number(cat.sort_order || 0),
+        is_active: !!cat.is_active,
+      })
+      .eq('id', cat.id)
+
+    setSavingCatId('')
+
+    if (error) {
+      alert('저장 실패: ' + error.message)
+      return
+    }
+
+    alert('✅ 카테고리가 저장됐습니다')
+    loadCats()
+  }
+
   const toggleCat = async (cat: Category) => {
     await sb.from('categories').update({ is_active: !cat.is_active }).eq('id', cat.id)
     loadCats()
@@ -334,7 +367,7 @@ export default function AdminPage() {
                 value={newCatIcon}
                 onChange={(e) => setNewCatIcon(e.target.value)}
                 placeholder="아이콘"
-                className="w-14 border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px]"
+                className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px]"
               />
               <input
                 value={newCatName}
@@ -343,7 +376,10 @@ export default function AdminPage() {
                 className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
                 onKeyDown={(e: any) => e.key === 'Enter' && addCat()}
               />
-              <button onClick={addCat} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold">
+              <button
+                onClick={addCat}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
+              >
                 추가
               </button>
             </div>
@@ -357,31 +393,65 @@ export default function AdminPage() {
             <div className="bg-white rounded-xl p-8 text-center text-slate-400">카테고리가 없습니다.</div>
           ) : (
             cats.map((c) => (
-              <div
-                key={c.id}
-                className={`bg-white rounded-xl border p-4 flex items-center gap-3 ${
-                  !c.is_active ? 'opacity-50 border-slate-100' : 'border-slate-200'
-                }`}
-              >
-                <span className="text-2xl w-9 text-center flex-shrink-0">{c.icon || '📋'}</span>
-                <div className="flex-1">
-                  <div className="text-[14px] font-bold text-slate-800">{getCatLabel(c)}</div>
-                  <div className="text-[11px] text-slate-400">
-                    순서: {c.sort_order || 0} · {c.is_active ? '표시중' : '숨김'}
+              <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="grid grid-cols-12 gap-3 items-center">
+                  <div className="col-span-2">
+                    <label className="text-[11px] text-slate-400 block mb-1">아이콘</label>
+                    <input
+                      value={c.icon || ''}
+                      onChange={(e) => updateCatField(c.id, 'icon', e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px]"
+                    />
+                  </div>
+
+                  <div className="col-span-5">
+                    <label className="text-[11px] text-slate-400 block mb-1">이름</label>
+                    <input
+                      value={c.name || ''}
+                      onChange={(e) => updateCatField(c.id, 'name', e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="text-[11px] text-slate-400 block mb-1">순서</label>
+                    <input
+                      type="number"
+                      value={c.sort_order || 0}
+                      onChange={(e) => updateCatField(c.id, 'sort_order', Number(e.target.value))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                    />
+                  </div>
+
+                  <div className="col-span-3">
+                    <label className="text-[11px] text-slate-400 block mb-1">상태</label>
+                    <div className="text-[12px] font-bold text-slate-600 py-2">
+                      {c.is_active ? '표시중' : '숨김'}
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
+
+                <div className="mt-3 flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => saveCat(c)}
+                    disabled={savingCatId === c.id}
+                    className="text-[12px] font-bold px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+                  >
+                    {savingCatId === c.id ? '저장 중...' : '저장'}
+                  </button>
+
                   <button
                     onClick={() => toggleCat(c)}
-                    className={`text-[11px] font-bold px-3 py-1.5 rounded-lg ${
+                    className={`text-[12px] font-bold px-4 py-2 rounded-lg ${
                       c.is_active ? 'bg-slate-100 text-slate-600' : 'bg-green-100 text-green-700'
                     }`}
                   >
                     {c.is_active ? '숨기기' : '보이기'}
                   </button>
+
                   <button
                     onClick={() => deleteCat(c.id, getCatLabel(c))}
-                    className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-red-50 text-red-500"
+                    className="text-[12px] font-bold px-4 py-2 rounded-lg bg-red-50 text-red-500"
                   >
                     삭제
                   </button>
@@ -422,11 +492,7 @@ export default function AdminPage() {
           </div>
 
           {list.length > 0 && (
-            <div
-              className={`bg-white rounded-xl border p-3 transition-all ${
-                selected.size > 0 ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200'
-              }`}
-            >
+            <div className={`bg-white rounded-xl border p-3 transition-all ${selected.size > 0 ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200'}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -449,13 +515,11 @@ export default function AdminPage() {
                         className="w-full border border-indigo-300 rounded-lg px-2 py-1.5 text-[12px] bg-white"
                       >
                         <option value="">카테고리 선택...</option>
-                        {cats
-                          .filter((c) => c.is_active)
-                          .map((c) => (
-                            <option key={c.id} value={getCatLabel(c)}>
-                              {c.icon || '📋'} {getCatLabel(c)}
-                            </option>
-                          ))}
+                        {cats.filter((c) => c.is_active).map((c) => (
+                          <option key={c.id} value={getCatLabel(c)}>
+                            {c.icon || '📋'} {getCatLabel(c)}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <button
@@ -489,12 +553,7 @@ export default function AdminPage() {
             list.map((b) => {
               const isChecked = selected.has(b.id)
               return (
-                <div
-                  key={b.id}
-                  className={`bg-white rounded-xl border p-4 transition-all ${
-                    isChecked ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-200'
-                  }`}
-                >
+                <div key={b.id} className={`bg-white rounded-xl border p-4 transition-all ${isChecked ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-200'}`}>
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -522,18 +581,13 @@ export default function AdminPage() {
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         {!b.approved && (
-                          <button
-                            onClick={() => approve(b.id)}
-                            className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg"
-                          >
+                          <button onClick={() => approve(b.id)} className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg">
                             ✅ 승인
                           </button>
                         )}
                         <button
                           onClick={() => toggleVip(b)}
-                          className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${
-                            b.is_vip ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
-                          }`}
+                          className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${b.is_vip ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}
                         >
                           {b.is_vip ? 'VIP 해제' : '⭐ VIP'}
                         </button>
