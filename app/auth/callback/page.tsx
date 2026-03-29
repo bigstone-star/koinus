@@ -21,7 +21,7 @@ export default function CallbackPage() {
         const errorParam = params.get('error')
         const errorDescription = params.get('error_description')
 
-        // 1) OAuth 제공자 에러 파라미터가 있으면 즉시 실패 처리
+        // 1) OAuth 에러 파라미터가 있으면 즉시 실패 처리
         if (errorParam) {
           setStatus('로그인 실패: ' + (errorDescription || errorParam))
           setTimeout(() => {
@@ -30,8 +30,11 @@ export default function CallbackPage() {
           return
         }
 
-        // 2) OAuth code가 있으면 세션 교환
-        if (code) {
+        // 2) 먼저 세션 확인
+        let { data: sessionData, error: sessionError } = await sb.auth.getSession()
+
+        // 3) 세션이 없고 code가 있을 때만 교환
+        if (!sessionData?.session && code) {
           const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code)
 
           if (exchangeError) {
@@ -42,11 +45,14 @@ export default function CallbackPage() {
             }, 1500)
             return
           }
+
+          // 교환 후 세션 다시 읽기
+          const refreshed = await sb.auth.getSession()
+          sessionData = refreshed.data
+          sessionError = refreshed.error
         }
 
-        // 3) 세션 확인
-        const { data: sessionData, error: sessionError } = await sb.auth.getSession()
-
+        // 4) 최종 세션 확인
         if (sessionError || !sessionData?.session?.user) {
           console.error('getSession error:', sessionError)
           setStatus('세션을 가져오지 못했습니다.')
@@ -59,7 +65,7 @@ export default function CallbackPage() {
         const user = sessionData.session.user
         const meta = user.user_metadata || {}
 
-        // 4) user_profiles upsert
+        // 5) user_profiles upsert
         // role은 넣지 않음 → 기존 admin/super_admin 유지
         const name =
           meta.full_name ||
@@ -91,7 +97,7 @@ export default function CallbackPage() {
           // upsert 실패해도 로그인은 계속 진행
         }
 
-        // 5) role 확인
+        // 6) role 확인
         const { data: profile, error: profileError } = await sb
           .from('user_profiles')
           .select('role')
@@ -106,7 +112,7 @@ export default function CallbackPage() {
 
         setStatus('환영합니다! 이동 중...')
 
-        // 6) 권한에 따라 이동
+        // 7) 권한에 따라 이동
         if (role === 'admin' || role === 'super_admin') {
           router.replace('/admin')
         } else {
