@@ -156,6 +156,22 @@ export default function DashboardPage() {
           </div>
         </a>
 
+        <a
+  href="/dashboard/edits"
+  className="block bg-white rounded-xl border border-slate-200 px-4 py-4 hover:bg-slate-50"
+>
+  <div className="flex items-start gap-3">
+    <div className="text-2xl">📄</div>
+    <div>
+      <div className="text-[14px] font-bold text-slate-800">
+        수정 요청 내역
+      </div>
+      <div className="text-[12px] text-slate-400 mt-1">
+        내가 보낸 수정 요청 상태를 확인합니다
+      </div>
+    </div>
+  </div>
+</a>
       </div>
     </div>
   )
