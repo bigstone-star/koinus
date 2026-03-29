@@ -212,25 +212,24 @@ const bottom = data.filter(
     style={{ maxWidth: `${headerLogoWidth}px` }}
   />
 ) : (
-{headerLogoUrl && !showTextLogo ? (
-  <img
-    src={headerLogoUrl}
-    alt={siteName}
-    className="h-8 w-auto"
-    style={{ maxWidth: `${headerLogoWidth}px` }}
-  />
-) : (
-  <h1 className="text-[20px] font-extrabold text-white">
-    <span className="text-amber-400">교차로</span> 휴스턴
-  </h1>
-)}
-  </h1>
-)}
-            </h1>
-            <p className="text-[11px] text-white/40 mt-0.5">
-              Houston, TX · 한인 비즈니스 디렉토리
-            </p>
-          </div>
+<div>
+  {headerLogoUrl && !showTextLogo ? (
+    <img
+      src={headerLogoUrl}
+      alt={siteName}
+      className="h-8 w-auto"
+      style={{ maxWidth: `${headerLogoWidth}px` }}
+    />
+  ) : (
+    <h1 className="text-[20px] font-extrabold text-white">
+      <span className="text-amber-400">교차로</span> 휴스턴
+    </h1>
+  )}
+
+  <p className="text-[11px] text-white/40 mt-0.5">
+    Houston, TX · 한인 비즈니스 디렉토리
+  </p>
+</div>
 
           <div className="flex items-center gap-2">
             <span className="text-[12px] font-bold text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full">
@@ -506,19 +505,22 @@ const bottom = data.filter(
               )}
 
               {sel.phone && (
-                <div className="flex gap-3 py-2">
-                  <span>📞</span>
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">전화</div>
-                    <a
-                      href={'tel:' + sel.phone}
-                      className="text-[14px] font-semibold text-indigo-600"
-                    >
-                      {sel.phone}
-                    </a>
-                  </div>
-                </div>
-              )}
+{sel.address && (
+  <div className="flex gap-3 py-2">
+    <span>📍</span>
+    <div>
+      <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">주소</div>
+      <a
+        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sel.address)}`}
+        target="_blank"
+        rel="noreferrer"
+        className="text-[14px] font-semibold text-indigo-600 underline"
+      >
+        {sel.address}
+      </a>
+    </div>
+  </div>
+)}
 
               {sel.website && (
                 <div className="flex gap-3 py-2">
