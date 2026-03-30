@@ -4,24 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
-const closeModal = () => {
-  setIsClosingModal(true)
-  setSel(null)
-  setReviews([])
-  setMyReview(null)
-  setReviewForm({
-    rating: 5,
-    review_text: '',
-    tags: [],
-  })
-
-  const params = new URLSearchParams(searchParams.toString())
-  params.delete('biz')
-
-  const query = params.toString()
-  router.push(query ? `/?${query}` : '/')
-}
-
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -66,8 +48,6 @@ export default function HomeClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [isClosingModal, setIsClosingModal] = useState(false)
-
   const [biz, setBiz] = useState<any[]>([])
   const [siteName, setSiteName] = useState('교차로 휴스턴')
   const [headerLogoUrl, setHeaderLogoUrl] = useState('')
@@ -78,6 +58,7 @@ export default function HomeClient() {
   const [cat, setCat] = useState('전체')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('rating')
+
   const [sel, setSel] = useState<any>(null)
   const [favs, setFavs] = useState<string[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -110,6 +91,17 @@ export default function HomeClient() {
     name_en: '이름순',
   }
 
+  const resetModalState = () => {
+    setSel(null)
+    setReviews([])
+    setMyReview(null)
+    setReviewForm({
+      rating: 5,
+      review_text: '',
+      tags: [],
+    })
+  }
+
   useEffect(() => {
     const catFromUrl = searchParams.get('cat')
     setCat(catFromUrl || '전체')
@@ -136,19 +128,19 @@ export default function HomeClient() {
 
   const updateSearchQuery = (nextSearch: string) => {
     setSearch(nextSearch)
+
     const params = new URLSearchParams(searchParams.toString())
 
     if (nextSearch.trim()) params.set('q', nextSearch)
     else params.delete('q')
+
+    params.delete('biz')
 
     const query = params.toString()
     router.push(query ? `/?${query}` : '/')
   }
 
   const openBusinessModal = async (b: any) => {
-    setSel(b)
-    await loadReviews(b.id)
-
     const params = new URLSearchParams(searchParams.toString())
     params.set('biz', b.id)
 
@@ -156,23 +148,13 @@ export default function HomeClient() {
     router.push(query ? `/?${query}` : '/')
   }
 
-const closeModal = () => {
-  setIsClosingModal(true)
-  setSel(null)
-  setReviews([])
-  setMyReview(null)
-  setReviewForm({
-    rating: 5,
-    review_text: '',
-    tags: [],
-  })
+  const closeModal = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('biz')
 
-  const params = new URLSearchParams(searchParams.toString())
-  params.delete('biz')
-
-  const query = params.toString()
-  router.push(query ? `/?${query}` : '/')
-}
+    const query = params.toString()
+    router.push(query ? `/?${query}` : '/')
+  }
 
   useEffect(() => {
     sb.from('site_settings')
@@ -366,24 +348,35 @@ const closeModal = () => {
     setReviewLoading(false)
   }, [user])
 
-useEffect(() => {
-  const bizId = searchParams.get('biz')
+  // URL의 biz 쿼리와 모달 상태를 완전히 동기화
+  useEffect(() => {
+    const bizId = searchParams.get('biz')
 
-  if (!bizId) {
-    setIsClosingModal(false)
-    return
-  }
+    // biz가 없으면 모달 닫기
+    if (!bizId) {
+      if (sel) resetModalState()
+      return
+    }
 
-  if (isClosingModal) return
-  if (biz.length === 0) return
-  if (sel?.id === bizId) return
+    // 목록이 아직 없으면 대기
+    if (biz.length === 0) return
 
-  const target = biz.find((b) => b.id === bizId)
-  if (target) {
-    setSel(target)
-    loadReviews(target.id)
-  }
-}, [searchParams, biz, sel, loadReviews, isClosingModal])
+    // 이미 같은 업소가 열려 있으면 그대로
+    if (sel?.id === bizId) return
+
+    const target = biz.find((b) => b.id === bizId)
+
+    if (target) {
+      setSel(target)
+      loadReviews(target.id)
+    } else {
+      // biz id가 현재 목록에 없으면 biz 쿼리 제거
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('biz')
+      const query = params.toString()
+      router.replace(query ? `/?${query}` : '/')
+    }
+  }, [searchParams, biz, sel, loadReviews, router])
 
   const toggleReviewTag = (tag: string) => {
     setReviewForm((prev) => {
