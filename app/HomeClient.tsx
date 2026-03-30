@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
+const displayCount = biz.length
+
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -537,8 +539,12 @@ export default function HomeClient() {
 
           <div className="flex items-center gap-2">
             <span className="text-[12px] font-bold text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full">
-              {totalCount}개
-            </span>
+              {currentQuery
+              ? `검색 ${displayCount}`
+                : currentCat !== '전체'
+              ? `${currentCat} ${displayCount}`
+              : displayCount}개
+              </span>
 
             {user ? (
               <>
