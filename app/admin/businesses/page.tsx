@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const sb = createClient(
@@ -8,30 +8,41 @@ const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+const ICON_OPTIONS = ['🍽️', '🛒', '🏥', '🦷', '⚖️', '🚗', '💄', '📚', '💳', '⛪', '🏠', '🧺', '🌿', '✈️', '📰', '👓', '📋']
+
 type Category = {
   id: string
   name: string
   icon?: string
+  sort_order?: number
   is_active?: boolean
 }
 
 export default function AdminBusinessesPage() {
-  const [loading, setLoading] = useState(true)
-  const [errorMsg, setErrorMsg] = useState('')
-  const [tab, setTab] = useState<'pending' | 'vip' | 'all'>('all')
-
+  const [tab, setTab] = useState<'pending' | 'vip' | 'all' | 'categories'>('all')
   const [list, setList] = useState<any[]>([])
-  const [cats, setCats] = useState<Category[]>([])
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [bulkCat, setBulkCat] = useState('')
-  const [bulkLoading, setBulkLoading] = useState(false)
-
   const [stats, setStats] = useState({
     total: 0,
     vip: 0,
     pending: 0,
   })
+  const [loading, setLoading] = useState(true)
+  const [ok, setOk] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const [cats, setCats] = useState<Category[]>([])
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatIcon, setNewCatIcon] = useState('📋')
+  const [catLoading, setCatLoading] = useState(false)
+  const [savingCatId, setSavingCatId] = useState('')
+
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkCat, setBulkCat] = useState('')
+  const [bulkSubCat, setBulkSubCat] = useState('')
+  const [bulkLoading, setBulkLoading] = useState(false)
+
+  const getCatLabel = (c: Category) => c.name || '이름없음'
 
   useEffect(() => {
     const init = async () => {
@@ -43,24 +54,24 @@ export default function AdminBusinessesPage() {
           return
         }
 
-        const { data: profile, error: profileError } = await sb
+        const { data: p, error } = await sb
           .from('user_profiles')
           .select('role')
           .eq('id', authData.user.id)
-          .maybeSingle()
+          .single()
 
-        if (profileError) {
+        if (error) {
           setErrorMsg('권한 정보를 불러오지 못했습니다.')
-          setLoading(false)
           return
         }
 
-        if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+        if (p?.role !== 'admin' && p?.role !== 'super_admin') {
           window.location.href = '/'
           return
         }
 
-        await Promise.all([loadStats(), loadCats(), loadBusinesses()])
+        setOk(true)
+        await Promise.all([load(), loadCats()])
       } catch (e) {
         setErrorMsg('관리자 정보를 불러오는 중 오류가 발생했습니다.')
       } finally {
@@ -71,67 +82,38 @@ export default function AdminBusinessesPage() {
     init()
   }, [])
 
-  useEffect(() => {
-    loadBusinesses()
-  }, [tab])
-
-  const loadStats = async () => {
-    const [t, v, p] = await Promise.all([
-      sb
-        .from('businesses')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true),
-
-      sb
-        .from('businesses')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_vip', true),
-
-      sb
-        .from('businesses')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true)
-        .eq('approved', false),
-    ])
-
-    setStats({
-      total: t.count || 0,
-      vip: v.count || 0,
-      pending: p.count || 0,
-    })
-  }
-
-  const loadCats = async () => {
-    const { data, error } = await sb
-      .from('categories')
-      .select('id, name, icon, is_active')
-      .order('sort_order', { ascending: true })
-
-    if (!error) {
-      setCats(data || [])
+  const loadList = useCallback(async (searchTerm?: string) => {
+    if (tab === 'categories') {
+      await loadCats()
+      return
     }
-  }
 
-  const loadBusinesses = async (termArg?: string) => {
     setLoading(true)
     setSelected(new Set())
 
-    const term = termArg !== undefined ? termArg : search
-
     let q = sb.from('businesses').select('*').eq('is_active', true)
 
-    if (tab === 'pending') q = q.eq('approved', false)
+    if (tab === 'pending') q = q.eq('data_source', 'user_registered')
     if (tab === 'vip') q = q.eq('is_vip', true)
+
+    const term = searchTerm !== undefined ? searchTerm : search
 
     if (term.trim()) {
       q = q.or(
-        `name_kr.ilike.%${term}%,name_en.ilike.%${term}%,category_main.ilike.%${term}%,address.ilike.%${term}%,phone.ilike.%${term}%`
+        [
+          `name_kr.ilike.%${term}%`,
+          `name_en.ilike.%${term}%`,
+          `category_main.ilike.%${term}%`,
+          `category_sub.ilike.%${term}%`,
+          `address.ilike.%${term}%`,
+          `phone.ilike.%${term}%`,
+        ].join(',')
       )
     }
 
     const { data, error } = await q
       .order('created_at', { ascending: false })
-      .limit(150)
+      .limit(200)
 
     if (error) {
       setErrorMsg('업소 목록을 불러오지 못했습니다.')
@@ -141,11 +123,59 @@ export default function AdminBusinessesPage() {
     }
 
     setLoading(false)
+  }, [tab, search])
+
+  async function load() {
+    try {
+      setLoading(true)
+
+      const [t, v, pd] = await Promise.all([
+        sb.from('businesses').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        sb.from('businesses').select('id', { count: 'exact', head: true }).eq('is_vip', true),
+        sb.from('businesses').select('id', { count: 'exact', head: true }).eq('data_source', 'user_registered').eq('is_active', true),
+      ])
+
+      setStats({
+        total: t.count || 0,
+        vip: v.count || 0,
+        pending: pd.count || 0,
+      })
+
+      await loadList()
+    } catch (e) {
+      setErrorMsg('통계를 불러오는 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleSearch = () => {
-    loadBusinesses(search)
+  async function loadCats() {
+    try {
+      setCatLoading(true)
+
+      const { data, error } = await sb
+        .from('categories')
+        .select('*')
+        .order('sort_order', { ascending: true })
+
+      if (error) {
+        setErrorMsg('카테고리를 불러오지 못했습니다.')
+        setCats([])
+      } else {
+        setCats(data || [])
+      }
+    } catch (e) {
+      setErrorMsg('카테고리 로딩 중 오류가 발생했습니다.')
+    } finally {
+      setCatLoading(false)
+    }
   }
+
+  useEffect(() => {
+    if (ok) loadList()
+  }, [tab, ok, loadList])
+
+  const handleSearch = () => loadList(search)
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -164,9 +194,9 @@ export default function AdminBusinessesPage() {
   }
 
   const bulkChangeCategory = async () => {
-    if (!bulkCat) return alert('변경할 카테고리를 선택하세요.')
-    if (selected.size === 0) return alert('업소를 먼저 선택하세요.')
-    if (!confirm(`선택한 ${selected.size}개 업소의 카테고리를 "${bulkCat}"로 변경할까요?`)) return
+    if (!bulkCat) return alert('변경할 메인 카테고리를 선택하세요')
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소의 메인 카테고리를 "${bulkCat}"로 변경할까요?`)) return
 
     setBulkLoading(true)
 
@@ -178,72 +208,298 @@ export default function AdminBusinessesPage() {
     setBulkLoading(false)
 
     if (error) {
-      alert('일괄 변경 실패: ' + error.message)
+      alert('메인 카테고리 변경 실패: ' + error.message)
       return
     }
 
-    alert(`✅ ${selected.size}개 업소의 카테고리가 변경됐습니다.`)
+    alert(`✅ ${selected.size}개 업소의 메인 카테고리가 "${bulkCat}"로 변경되었습니다.`)
     setSelected(new Set())
     setBulkCat('')
-    loadBusinesses()
+    loadList()
   }
 
-  const approve = async (id: string) => {
+  const bulkChangeSubCategory = async () => {
+    if (!bulkSubCat.trim()) return alert('변경할 서브카테고리를 입력하세요')
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소의 서브카테고리를 "${bulkSubCat}"로 변경할까요?`)) return
+
+    setBulkLoading(true)
+
+    const { error } = await sb
+      .from('businesses')
+      .update({ category_sub: bulkSubCat.trim() })
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
+
+    if (error) {
+      alert('서브카테고리 변경 실패: ' + error.message)
+      return
+    }
+
+    alert(`✅ ${selected.size}개 업소의 서브카테고리가 "${bulkSubCat}"로 변경되었습니다.`)
+    setSelected(new Set())
+    setBulkSubCat('')
+    loadList()
+  }
+
+  const bulkClearSubCategory = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소의 서브카테고리를 비울까요?`)) return
+
+    setBulkLoading(true)
+
+    const { error } = await sb
+      .from('businesses')
+      .update({ category_sub: null })
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
+
+    if (error) {
+      alert('서브카테고리 초기화 실패: ' + error.message)
+      return
+    }
+
+    alert(`✅ ${selected.size}개 업소의 서브카테고리가 초기화되었습니다.`)
+    setSelected(new Set())
+    setBulkSubCat('')
+    loadList()
+  }
+
+  const bulkApprove = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소를 승인할까요?`)) return
+
+    setBulkLoading(true)
+
     const { error } = await sb
       .from('businesses')
       .update({ approved: true })
-      .eq('id', id)
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
 
     if (error) {
       alert('승인 실패: ' + error.message)
       return
     }
 
-    loadBusinesses()
-    loadStats()
+    alert(`✅ ${selected.size}개 업소가 승인되었습니다.`)
+    setSelected(new Set())
+    loadList()
+    load()
   }
 
-  const toggleVip = async (b: any) => {
+  const bulkUnapprove = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소의 승인을 취소할까요?`)) return
+
+    setBulkLoading(true)
+
     const { error } = await sb
       .from('businesses')
-      .update({
-        is_vip: !b.is_vip,
-        vip_tier: !b.is_vip ? 'pro' : null,
-      })
-      .eq('id', b.id)
+      .update({ approved: false })
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
 
     if (error) {
-      alert('VIP 변경 실패: ' + error.message)
+      alert('승인 취소 실패: ' + error.message)
       return
     }
 
-    loadBusinesses()
-    loadStats()
+    alert(`✅ ${selected.size}개 업소의 승인이 취소되었습니다.`)
+    setSelected(new Set())
+    loadList()
+    load()
   }
 
-  const deactivate = async (id: string) => {
-    if (!confirm('이 업소를 비활성화할까요?')) return
+  const bulkSetVip = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소를 VIP로 지정할까요?`)) return
+
+    setBulkLoading(true)
+
+    const { error } = await sb
+      .from('businesses')
+      .update({ is_vip: true, vip_tier: 'pro' })
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
+
+    if (error) {
+      alert('VIP 지정 실패: ' + error.message)
+      return
+    }
+
+    alert(`✅ ${selected.size}개 업소가 VIP로 지정되었습니다.`)
+    setSelected(new Set())
+    loadList()
+    load()
+  }
+
+  const bulkUnsetVip = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소의 VIP를 해제할까요?`)) return
+
+    setBulkLoading(true)
+
+    const { error } = await sb
+      .from('businesses')
+      .update({ is_vip: false, vip_tier: null })
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
+
+    if (error) {
+      alert('VIP 해제 실패: ' + error.message)
+      return
+    }
+
+    alert(`✅ ${selected.size}개 업소의 VIP가 해제되었습니다.`)
+    setSelected(new Set())
+    loadList()
+    load()
+  }
+
+  const bulkDeactivate = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소를 비활성화할까요?`)) return
+
+    setBulkLoading(true)
 
     const { error } = await sb
       .from('businesses')
       .update({ is_active: false })
-      .eq('id', id)
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
 
     if (error) {
       alert('비활성화 실패: ' + error.message)
       return
     }
 
-    loadBusinesses()
-    loadStats()
+    alert(`✅ ${selected.size}개 업소가 비활성화되었습니다.`)
+    setSelected(new Set())
+    loadList()
+    load()
   }
 
-  const activeCats = useMemo(
-    () => cats.filter((c) => c.is_active),
-    [cats]
-  )
+  const bulkReactivate = async () => {
+    if (selected.size === 0) return alert('업소를 먼저 선택하세요')
+    if (!confirm(`선택한 ${selected.size}개 업소를 다시 활성화할까요?`)) return
 
-  if (loading && list.length === 0 && !errorMsg) {
+    setBulkLoading(true)
+
+    const { error } = await sb
+      .from('businesses')
+      .update({ is_active: true })
+      .in('id', Array.from(selected))
+
+    setBulkLoading(false)
+
+    if (error) {
+      alert('재활성화 실패: ' + error.message)
+      return
+    }
+
+    alert(`✅ ${selected.size}개 업소가 다시 활성화되었습니다.`)
+    setSelected(new Set())
+    loadList()
+    load()
+  }
+
+  const approve = async (id: string) => {
+    await sb.from('businesses').update({ approved: true }).eq('id', id)
+    loadList()
+    load()
+  }
+
+  const toggleVip = async (b: any) => {
+    await sb
+      .from('businesses')
+      .update({ is_vip: !b.is_vip, vip_tier: !b.is_vip ? 'pro' : null })
+      .eq('id', b.id)
+
+    loadList()
+    load()
+  }
+
+  const deactivate = async (id: string) => {
+    if (!confirm('비활성화할까요?')) return
+    await sb.from('businesses').update({ is_active: false }).eq('id', id)
+    loadList()
+    load()
+  }
+
+  const addCat = async () => {
+    if (!newCatName.trim()) return alert('카테고리 이름을 입력하세요')
+
+    const maxOrder = cats.length > 0 ? Math.max(...cats.map((c) => c.sort_order || 0)) : 0
+
+    const { error } = await sb.from('categories').insert({
+      name: newCatName.trim(),
+      icon: newCatIcon,
+      sort_order: maxOrder + 1,
+      is_active: true,
+    })
+
+    if (error) {
+      alert('추가 실패: ' + error.message)
+      return
+    }
+
+    setNewCatName('')
+    setNewCatIcon('📋')
+    loadCats()
+  }
+
+  const updateCatField = (id: string, field: keyof Category, value: any) => {
+    setCats((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
+    )
+  }
+
+  const saveCat = async (cat: Category) => {
+    if (!cat.name?.trim()) return alert('카테고리 이름을 입력하세요')
+
+    setSavingCatId(cat.id)
+
+    const { error } = await sb
+      .from('categories')
+      .update({
+        name: cat.name.trim(),
+        icon: cat.icon || '📋',
+        sort_order: Number(cat.sort_order || 0),
+        is_active: !!cat.is_active,
+      })
+      .eq('id', cat.id)
+
+    setSavingCatId('')
+
+    if (error) {
+      alert('저장 실패: ' + error.message)
+      return
+    }
+
+    alert('✅ 카테고리가 저장됐습니다')
+    loadCats()
+  }
+
+  const toggleCat = async (cat: Category) => {
+    await sb.from('categories').update({ is_active: !cat.is_active }).eq('id', cat.id)
+    loadCats()
+  }
+
+  const deleteCat = async (id: string, name: string) => {
+    if (!confirm(`"${name}" 카테고리를 삭제할까요?`)) return
+    await sb.from('categories').delete().eq('id', id)
+    loadCats()
+  }
+
+  if (loading && !ok && !errorMsg) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
         <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -268,62 +524,65 @@ export default function AdminBusinessesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 max-w-4xl mx-auto pb-10">
-      <div className="bg-[#1a1a2e] px-5 pt-10 pb-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-[22px] font-extrabold text-white">🏢 업소 관리</h1>
-            <p className="text-white/40 text-[12px] mt-0.5">
-              업소 검색, 승인, VIP 설정, 카테고리 변경
-            </p>
+    <div className="min-h-screen bg-slate-100 max-w-2xl mx-auto pb-10">
+      <div className="bg-[#1a1a2e] px-5 pt-10 pb-6 flex items-center justify-between gap-2">
+        <div>
+          <h1 className="text-[22px] font-extrabold text-white">업소 관리</h1>
+          <p className="text-white/40 text-[12px] mt-0.5">업소 검색, 승인, 수정, 일괄 작업</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <a
+            href="/admin/categories"
+            className="text-white/70 text-[12px] border border-white/20 px-3 py-1.5 rounded-lg"
+          >
+            🗂 카테고리
+          </a>
+          <a
+            href="/admin"
+            className="text-white/70 text-[12px] border border-white/20 px-3 py-1.5 rounded-lg"
+          >
+            Admin
+          </a>
+          <a
+            href="/"
+            className="text-white/70 text-[12px] border border-white/20 px-3 py-1.5 rounded-lg"
+          >
+            홈
+          </a>
+        </div>
+      </div>
+
+      <div className="px-4 py-4">
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-4 flex-wrap">
+          <div className="text-[13px] font-bold text-slate-700">운영 현황</div>
+
+          <div className="text-[12px] text-slate-500">
+            전체 <span className="font-extrabold text-slate-800">{stats.total}</span>
           </div>
 
-          <div className="flex gap-2 flex-wrap justify-end">
-            <a
-              href="/admin"
-              className="text-white/70 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
-            >
-              관리자 홈
-            </a>
-            <a
-              href="/"
-              className="text-white/70 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
-            >
-              홈
-            </a>
+          <div className="text-[12px] text-slate-500">
+            VIP <span className="font-extrabold text-amber-600">{stats.vip}</span>
+          </div>
+
+          <div className="text-[12px] text-slate-500">
+            신규 <span className="font-extrabold text-red-500">{stats.pending}</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 px-4 py-4">
-        {[
-          { l: '전체 업소', v: stats.total, c: 'text-slate-700' },
-          { l: 'VIP 업소', v: stats.vip, c: 'text-amber-600' },
-          { l: '승인 대기', v: stats.pending, c: 'text-red-500' },
-        ].map((s) => (
-          <div
-            key={s.l}
-            className="bg-white rounded-xl border border-slate-200 p-3 text-center"
-          >
-            <div className={`text-[22px] font-extrabold ${s.c}`}>{s.v}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">{s.l}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="px-4 flex gap-2 mb-3 flex-wrap">
         {([
-          ['pending', '승인 대기'],
+          ['pending', '신규 대기'],
           ['vip', 'VIP'],
           ['all', '전체'],
+          ['categories', '🗂 카테고리'],
         ] as const).map(([k, l]) => (
           <button
             key={k}
             onClick={() => setTab(k)}
             className={`px-4 py-2 rounded-lg text-[12px] font-bold ${
-              tab === k
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white border border-slate-200 text-slate-600'
+              tab === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
             }`}
           >
             {l}
@@ -331,204 +590,407 @@ export default function AdminBusinessesPage() {
         ))}
 
         <button
-          onClick={() => {
-            loadStats()
-            loadBusinesses()
-          }}
+          onClick={load}
           className="ml-auto px-3 py-2 rounded-lg text-[12px] font-bold bg-white border border-slate-200 text-slate-500"
         >
-          🔄 새로고침
+          🔄
         </button>
       </div>
 
-      <div className="px-4 space-y-2">
-        <div className="bg-white rounded-xl border border-slate-200 p-3">
-          <div className="flex gap-2">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e: any) => e.key === 'Enter' && handleSearch()}
-              placeholder="업소명, 카테고리, 전화번호, 주소 검색..."
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
-            />
+      {tab === 'categories' ? (
+        <div className="px-4 space-y-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="text-[13px] font-bold text-slate-700 mb-3">새 카테고리 추가</div>
 
-            <button
-              onClick={handleSearch}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
-            >
-              🔍 검색
-            </button>
-
-            {search && (
-              <button
-                onClick={() => {
-                  setSearch('')
-                  loadBusinesses('')
-                }}
-                className="bg-slate-100 text-slate-500 px-3 py-2 rounded-lg text-[13px] font-bold"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {list.length > 0 && (
-          <div
-            className={`bg-white rounded-xl border p-3 transition-all ${
-              selected.size > 0
-                ? 'border-indigo-300 bg-indigo-50/40'
-                : 'border-slate-200'
-            }`}
-          >
-            <div className="flex items-center gap-2 flex-wrap">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">아이콘</label>
                 <input
-                  type="checkbox"
-                  checked={selected.size === list.length && list.length > 0}
-                  onChange={toggleAll}
-                  className="w-4 h-4 rounded accent-indigo-600"
+                  value={newCatIcon}
+                  onChange={(e) => setNewCatIcon(e.target.value)}
+                  placeholder="아이콘"
+                  className="w-20 border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px] mb-2"
                 />
-                <span className="text-[12px] font-bold text-slate-600">
-                  {selected.size > 0 ? `${selected.size}개 선택됨` : '전체 선택'}
-                </span>
-              </label>
-
-              {selected.size > 0 && (
-                <>
-                  <div className="flex-1 min-w-[180px]">
-                    <select
-                      value={bulkCat}
-                      onChange={(e) => setBulkCat(e.target.value)}
-                      className="w-full border border-indigo-300 rounded-lg px-2 py-1.5 text-[12px] bg-white"
+                <div className="flex flex-wrap gap-1">
+                  {ICON_OPTIONS.map((icon) => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => setNewCatIcon(icon)}
+                      className={`w-9 h-9 rounded-lg border text-[18px] ${
+                        newCatIcon === icon ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'
+                      }`}
                     >
-                      <option value="">카테고리 선택...</option>
-                      {activeCats.map((c) => (
-                        <option key={c.id} value={c.name}>
-                          {c.icon || '📋'} {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                  <button
-                    onClick={bulkChangeCategory}
-                    disabled={bulkLoading || !bulkCat}
-                    className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
-                  >
-                    {bulkLoading ? '변경 중...' : '일괄 변경'}
-                  </button>
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">이름</label>
+                <input
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="카테고리 이름"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                  onKeyDown={(e: any) => e.key === 'Enter' && addCat()}
+                />
+              </div>
 
-                  <button
-                    onClick={() => setSelected(new Set())}
-                    className="text-[12px] text-slate-400 px-2 py-1.5"
-                  >
-                    선택 해제
-                  </button>
-                </>
-              )}
+              <button
+                onClick={addCat}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
+              >
+                추가
+              </button>
             </div>
           </div>
-        )}
 
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : list.length === 0 ? (
-          <div className="bg-white rounded-xl p-8 text-center text-slate-400">
-            {search ? `"${search}" 검색 결과가 없습니다` : '업소가 없습니다'}
-          </div>
-        ) : (
-          list.map((b) => {
-            const isChecked = selected.has(b.id)
-
-            return (
-              <div
-                key={b.id}
-                className={`bg-white rounded-xl border p-4 transition-all ${
-                  isChecked
-                    ? 'border-indigo-400 bg-indigo-50/30'
-                    : 'border-slate-200'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleSelect(b.id)}
-                    className="mt-1 w-4 h-4 rounded accent-indigo-600 flex-shrink-0"
-                  />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-slate-800 text-[14px] flex items-center gap-2 mb-1 flex-wrap">
-                      {b.name_kr || b.name_en}
-
-                      {b.is_vip && (
-                        <span className="text-[9px] font-black bg-amber-300 text-amber-900 px-1.5 py-0.5 rounded">
-                          {b.vip_tier?.toUpperCase()}
-                        </span>
-                      )}
-
-                      {!b.approved && (
-                        <span className="text-[9px] font-black bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">
-                          승인대기
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-[11px] text-slate-400 mb-2 flex flex-wrap gap-2">
-                      {b.category_main && (
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded font-medium">
-                          {b.category_main}
-                        </span>
-                      )}
-                      {b.phone && <span>{b.phone}</span>}
-                      {b.address && <span className="truncate">{b.address}</span>}
-                    </div>
-
-                    <div className="flex gap-2 flex-wrap">
-                      {!b.approved && (
+          {catLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : cats.length === 0 ? (
+            <div className="bg-white rounded-xl p-8 text-center text-slate-400">카테고리가 없습니다.</div>
+          ) : (
+            cats.map((c) => (
+              <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="grid grid-cols-12 gap-3 items-start">
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="text-[11px] text-slate-400 block mb-1">아이콘</label>
+                    <input
+                      value={c.icon || ''}
+                      onChange={(e) => updateCatField(c.id, 'icon', e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-2 py-2 text-center text-[18px] mb-2"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {ICON_OPTIONS.map((icon) => (
                         <button
-                          onClick={() => approve(b.id)}
-                          className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg"
+                          key={icon}
+                          type="button"
+                          onClick={() => updateCatField(c.id, 'icon', icon)}
+                          className={`w-9 h-9 rounded-lg border text-[18px] ${
+                            c.icon === icon ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'
+                          }`}
                         >
-                          ✅ 승인
+                          {icon}
                         </button>
-                      )}
+                      ))}
+                    </div>
+                  </div>
 
-                      <a
-                        href={`/admin/businesses/${b.id}`}
-                        className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-indigo-50 text-indigo-600"
-                      >
-                        ✏️ 수정
-                      </a>
+                  <div className="col-span-12 md:col-span-5">
+                    <label className="text-[11px] text-slate-400 block mb-1">이름</label>
+                    <input
+                      value={c.name || ''}
+                      onChange={(e) => updateCatField(c.id, 'name', e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                    />
+                  </div>
 
-                      <button
-                        onClick={() => toggleVip(b)}
-                        className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${
-                          b.is_vip
-                            ? 'bg-red-50 text-red-600'
-                            : 'bg-amber-50 text-amber-700'
-                        }`}
-                      >
-                        {b.is_vip ? 'VIP 해제' : '⭐ VIP'}
-                      </button>
+                  <div className="col-span-6 md:col-span-2">
+                    <label className="text-[11px] text-slate-400 block mb-1">순서</label>
+                    <input
+                      type="number"
+                      value={c.sort_order || 0}
+                      onChange={(e) => updateCatField(c.id, 'sort_order', Number(e.target.value))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                    />
+                  </div>
 
-                      <button
-                        onClick={() => deactivate(b.id)}
-                        className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-slate-100 text-slate-500"
-                      >
-                        🗑 비활성화
-                      </button>
+                  <div className="col-span-6 md:col-span-2">
+                    <label className="text-[11px] text-slate-400 block mb-1">상태</label>
+                    <div className="text-[12px] font-bold text-slate-600 py-2">
+                      {c.is_active ? '표시중' : '숨김'}
                     </div>
                   </div>
                 </div>
+
+                <div className="mt-3 flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => saveCat(c)}
+                    disabled={savingCatId === c.id}
+                    className="text-[12px] font-bold px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50"
+                  >
+                    {savingCatId === c.id ? '저장 중...' : '저장'}
+                  </button>
+
+                  <button
+                    onClick={() => toggleCat(c)}
+                    className={`text-[12px] font-bold px-4 py-2 rounded-lg ${
+                      c.is_active ? 'bg-slate-100 text-slate-600' : 'bg-green-100 text-green-700'
+                    }`}
+                  >
+                    {c.is_active ? '숨기기' : '보이기'}
+                  </button>
+
+                  <button
+                    onClick={() => deleteCat(c.id, getCatLabel(c))}
+                    className="text-[12px] font-bold px-4 py-2 rounded-lg bg-red-50 text-red-500"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
-            )
-          })
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="px-4 space-y-2">
+          <div className="bg-white rounded-xl border border-slate-200 p-3">
+            <div className="flex gap-2">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e: any) => e.key === 'Enter' && handleSearch()}
+                placeholder="업소명, 카테고리, 서브카테고리, 주소, 전화 검색..."
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+              />
+              <button
+                onClick={handleSearch}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-[13px] font-bold"
+              >
+                🔍 검색
+              </button>
+              {search && (
+                <button
+                  onClick={() => {
+                    setSearch('')
+                    loadList('')
+                  }}
+                  className="bg-slate-100 text-slate-500 px-3 py-2 rounded-lg text-[13px] font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {list.length > 0 && (
+            <div className={`bg-white rounded-xl border p-3 transition-all ${selected.size > 0 ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === list.length && list.length > 0}
+                    onChange={toggleAll}
+                    className="w-4 h-4 rounded accent-indigo-600"
+                  />
+                  <span className="text-[12px] font-bold text-slate-600">
+                    {selected.size > 0 ? `${selected.size}개 선택됨` : '전체 선택'}
+                  </span>
+                </label>
+
+                {selected.size > 0 && (
+                  <>
+                    <div className="flex-1 min-w-[140px]">
+                      <select
+                        value={bulkCat}
+                        onChange={(e) => setBulkCat(e.target.value)}
+                        className="w-full border border-indigo-300 rounded-lg px-2 py-1.5 text-[12px] bg-white"
+                      >
+                        <option value="">메인 카테고리 선택...</option>
+                        {cats.filter((c) => c.is_active).map((c) => (
+                          <option key={c.id} value={getCatLabel(c)}>
+                            {c.icon || '📋'} {getCatLabel(c)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={bulkChangeCategory}
+                      disabled={bulkLoading || !bulkCat}
+                      className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      {bulkLoading ? '처리 중...' : '메인 변경'}
+                    </button>
+
+                    <div className="min-w-[160px]">
+                      <input
+                        value={bulkSubCat}
+                        onChange={(e) => setBulkSubCat(e.target.value)}
+                        placeholder="서브카테고리 입력"
+                        className="w-full border border-indigo-300 rounded-lg px-2 py-1.5 text-[12px] bg-white"
+                      />
+                    </div>
+
+                    <button
+                      onClick={bulkChangeSubCategory}
+                      disabled={bulkLoading || !bulkSubCat.trim()}
+                      className="bg-violet-600 text-white px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      {bulkLoading ? '처리 중...' : '서브 변경'}
+                    </button>
+
+                    <button
+                      onClick={bulkClearSubCategory}
+                      disabled={bulkLoading}
+                      className="bg-slate-100 text-slate-600 px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      서브 비우기
+                    </button>
+
+                    <button
+                      onClick={bulkApprove}
+                      disabled={bulkLoading}
+                      className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      승인
+                    </button>
+
+                    <button
+                      onClick={bulkUnapprove}
+                      disabled={bulkLoading}
+                      className="bg-yellow-500 text-white px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      승인취소
+                    </button>
+
+                    <button
+                      onClick={bulkSetVip}
+                      disabled={bulkLoading}
+                      className="bg-amber-500 text-white px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      VIP 지정
+                    </button>
+
+                    <button
+                      onClick={bulkUnsetVip}
+                      disabled={bulkLoading}
+                      className="bg-orange-100 text-orange-700 px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      VIP 해제
+                    </button>
+
+                    <button
+                      onClick={bulkDeactivate}
+                      disabled={bulkLoading}
+                      className="bg-red-100 text-red-600 px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      비활성화
+                    </button>
+
+                    <button
+                      onClick={bulkReactivate}
+                      disabled={bulkLoading}
+                      className="bg-green-100 text-green-700 px-4 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40"
+                    >
+                      재활성화
+                    </button>
+
+                    <button
+                      onClick={() => setSelected(new Set())}
+                      className="text-[12px] text-slate-400 px-2 py-1.5"
+                    >
+                      선택 해제
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : list.length === 0 ? (
+            <div className="bg-white rounded-xl p-8 text-center text-slate-400">
+              {search ? `"${search}" 검색 결과가 없습니다` : '항목 없음'}
+            </div>
+          ) : (
+            list.map((b) => {
+              const isChecked = selected.has(b.id)
+
+              return (
+                <div
+                  key={b.id}
+                  className={`bg-white rounded-xl border p-4 transition-all ${isChecked ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-200'}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleSelect(b.id)}
+                      className="mt-1 w-4 h-4 rounded accent-indigo-600 flex-shrink-0"
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-800 text-[14px] flex items-center gap-2 mb-1 flex-wrap">
+                        {b.name_kr || b.name_en}
+
+                        {b.is_vip && (
+                          <span className="text-[9px] font-black bg-amber-300 text-amber-900 px-1.5 py-0.5 rounded">
+                            {b.vip_tier?.toUpperCase() || 'VIP'}
+                          </span>
+                        )}
+
+                        {!b.approved && (
+                          <span className="text-[9px] font-black bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded">
+                            승인대기
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 mb-2 flex items-center gap-2 flex-wrap">
+                        {b.category_main && (
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded font-medium">
+                            {b.category_main}
+                          </span>
+                        )}
+
+                        {b.category_sub && (
+                          <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
+                            {b.category_sub}
+                          </span>
+                        )}
+
+                        {b.phone && <span>{b.phone}</span>}
+                      </div>
+
+                      <div className="flex gap-2 flex-wrap">
+                        {!b.approved && (
+                          <button
+                            onClick={() => approve(b.id)}
+                            className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg"
+                          >
+                            ✅ 승인
+                          </button>
+                        )}
+
+                        <a
+                          href={`/admin/businesses/${b.id}`}
+                          className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-indigo-50 text-indigo-600"
+                        >
+                          ✏️ 수정
+                        </a>
+
+                        <button
+                          onClick={() => toggleVip(b)}
+                          className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${
+                            b.is_vip ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+                          }`}
+                        >
+                          {b.is_vip ? 'VIP 해제' : '⭐ VIP'}
+                        </button>
+
+                        <button
+                          onClick={() => deactivate(b.id)}
+                          className="text-[11px] font-bold py-1.5 px-3 rounded-lg bg-slate-100 text-slate-500"
+                        >
+                          🗑 비활성화
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
     </div>
   )
 }
