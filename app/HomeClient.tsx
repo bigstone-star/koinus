@@ -4,6 +4,24 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
+const closeModal = () => {
+  setIsClosingModal(true)
+  setSel(null)
+  setReviews([])
+  setMyReview(null)
+  setReviewForm({
+    rating: 5,
+    review_text: '',
+    tags: [],
+  })
+
+  const params = new URLSearchParams(searchParams.toString())
+  params.delete('biz')
+
+  const query = params.toString()
+  router.push(query ? `/?${query}` : '/')
+}
+
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -345,18 +363,24 @@ export default function HomeClient() {
     setReviewLoading(false)
   }, [user])
 
-  useEffect(() => {
-    const bizId = searchParams.get('biz')
-    if (!bizId || biz.length === 0) return
+useEffect(() => {
+  const bizId = searchParams.get('biz')
 
-    if (sel?.id === bizId) return
+  if (!bizId) {
+    setIsClosingModal(false)
+    return
+  }
 
-    const target = biz.find((b) => b.id === bizId)
-    if (target) {
-      setSel(target)
-      loadReviews(target.id)
-    }
-  }, [searchParams, biz, sel, loadReviews])
+  if (isClosingModal) return
+  if (biz.length === 0) return
+  if (sel?.id === bizId) return
+
+  const target = biz.find((b) => b.id === bizId)
+  if (target) {
+    setSel(target)
+    loadReviews(target.id)
+  }
+}, [searchParams, biz, sel, loadReviews, isClosingModal])
 
   const toggleReviewTag = (tag: string) => {
     setReviewForm((prev) => {
