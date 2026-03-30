@@ -739,19 +739,19 @@ export default function Home() {
                 <p className="text-[13px] text-slate-400">{sel.name_en}</p>
               )}
 
-              {sel.rating > 0 && (
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-amber-400">
-                    {'★'.repeat(Math.round(Number(sel.rating)))}
-                  </span>
-                  <span className="font-bold">
-                    {Number(sel.rating).toFixed(1)}
-                  </span>
-                  <span className="text-[13px] text-slate-400">
-                    ({(sel.review_count || 0).toLocaleString()}개)
-                  </span>
-                </div>
-              )}
+{sel.rating > 0 && (
+  <div className="mt-2">
+    <div className="flex items-center gap-2">
+      <span className="text-amber-400">
+        {'★'.repeat(Math.round(Number(sel.rating)))}
+      </span>
+      <span className="font-bold">{Number(sel.rating).toFixed(1)}</span>
+      <span className="text-[13px] text-slate-400">
+        외부 평점 · {(sel.review_count || 0).toLocaleString()}개
+      </span>
+    </div>
+  </div>
+)}
 
               {sel.description_kr && (
                 <p className="text-[13px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">
