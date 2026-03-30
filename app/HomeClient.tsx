@@ -66,6 +66,8 @@ export default function HomeClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const [isClosingModal, setIsClosingModal] = useState(false)
+
   const [biz, setBiz] = useState<any[]>([])
   const [siteName, setSiteName] = useState('교차로 휴스턴')
   const [headerLogoUrl, setHeaderLogoUrl] = useState('')
@@ -154,22 +156,23 @@ export default function HomeClient() {
     router.push(query ? `/?${query}` : '/')
   }
 
-  const closeModal = () => {
-    setSel(null)
-    setReviews([])
-    setMyReview(null)
-    setReviewForm({
-      rating: 5,
-      review_text: '',
-      tags: [],
-    })
+const closeModal = () => {
+  setIsClosingModal(true)
+  setSel(null)
+  setReviews([])
+  setMyReview(null)
+  setReviewForm({
+    rating: 5,
+    review_text: '',
+    tags: [],
+  })
 
-    const params = new URLSearchParams(searchParams.toString())
-    params.delete('biz')
+  const params = new URLSearchParams(searchParams.toString())
+  params.delete('biz')
 
-    const query = params.toString()
-    router.push(query ? `/?${query}` : '/')
-  }
+  const query = params.toString()
+  router.push(query ? `/?${query}` : '/')
+}
 
   useEffect(() => {
     sb.from('site_settings')
