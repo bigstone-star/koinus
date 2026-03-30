@@ -631,17 +631,19 @@ export default function Home() {
                       {b.name_kr || b.name_en}
                     </div>
 
-                    {addr && (
-                      <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="block text-[12px] text-slate-500 truncate mt-0.5 underline"
-                      >
-                        {addr}
-                      </a>
-                    )}
+{addr && (
+  <div className="text-[12px] text-slate-500 truncate mt-0.5">
+    <a
+      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="inline underline"
+    >
+      {addr}
+    </a>
+  </div>
+)}
 
                     <div className="flex items-center gap-2.5 mt-1">
                       {b.rating > 0 && (
@@ -761,24 +763,24 @@ export default function Home() {
             </div>
 
             <div className="px-5 py-2 space-y-3">
-              {sel.address && (
-                <div className="flex gap-3 py-2">
-                  <span>📍</span>
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      주소
-                    </div>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sel.address)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[14px] font-semibold text-indigo-600 underline"
-                    >
-                      {sel.address}
-                    </a>
-                  </div>
-                </div>
-              )}
+{sel.address && (
+  <div className="flex gap-3 py-2">
+    <span>📍</span>
+    <div>
+      <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+        주소
+      </div>
+      <a
+        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sel.address)}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline text-[14px] font-semibold text-indigo-600 underline"
+      >
+        {sel.address}
+      </a>
+    </div>
+  </div>
+)}
 
               {sel.phone && (
                 <div className="flex gap-3 py-2">
