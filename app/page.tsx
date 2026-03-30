@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 const sb = createClient(
@@ -44,6 +45,9 @@ type Category = {
 }
 
 export default function Home() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [biz, setBiz] = useState<any[]>([])
   const [siteName, setSiteName] = useState('교차로 휴스턴')
   const [headerLogoUrl, setHeaderLogoUrl] = useState('')
@@ -69,7 +73,6 @@ export default function Home() {
   const [middleBannerIndex, setMiddleBannerIndex] = useState(0)
   const [bottomBannerIndex, setBottomBannerIndex] = useState(0)
 
-  // ===== 리뷰 상태 =====
   const [reviews, setReviews] = useState<any[]>([])
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewSaving, setReviewSaving] = useState(false)
@@ -85,6 +88,19 @@ export default function Home() {
     rating: '평점순',
     review_count: '리뷰순',
     name_en: '이름순',
+  }
+
+  useEffect(() => {
+    const catFromUrl = searchParams.get('cat')
+    setCat(catFromUrl || '전체')
+  }, [searchParams])
+
+  const changeCategory = (nextCat: string) => {
+    if (nextCat === '전체') {
+      router.push('/')
+    } else {
+      router.push(`/?cat=${encodeURIComponent(nextCat)}`)
+    }
   }
 
   useEffect(() => {
@@ -527,7 +543,7 @@ export default function Home() {
               {cats.map((c) => (
                 <button
                   key={c.name}
-                  onClick={() => setCat(c.name)}
+                  onClick={() => changeCategory(c.name)}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-lg border-[1.5px] border-slate-200 bg-white transition-all active:scale-[.97] text-left hover:bg-slate-50"
                 >
                   <span className="text-[20px] w-6 text-center flex-shrink-0">
@@ -549,7 +565,7 @@ export default function Home() {
       ) : (
         <div className="bg-white border-b border-slate-200 px-4 py-3 mt-3">
           <button
-            onClick={() => setCat('전체')}
+            onClick={() => changeCategory('전체')}
             className="text-[13px] font-bold text-slate-700 truncate text-left"
           >
             <span className="text-indigo-600">전체</span>
@@ -631,19 +647,19 @@ export default function Home() {
                       {b.name_kr || b.name_en}
                     </div>
 
-{addr && (
-  <div className="text-[12px] text-slate-500 truncate mt-0.5">
-    <a
-      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className="inline underline"
-    >
-      {addr}
-    </a>
-  </div>
-)}
+                    {addr && (
+                      <div className="text-[12px] text-slate-500 truncate mt-0.5">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline underline"
+                        >
+                          {addr}
+                        </a>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2.5 mt-1">
                       {b.rating > 0 && (
@@ -741,19 +757,19 @@ export default function Home() {
                 <p className="text-[13px] text-slate-400">{sel.name_en}</p>
               )}
 
-{sel.rating > 0 && (
-  <div className="mt-2">
-    <div className="flex items-center gap-2">
-      <span className="text-amber-400">
-        {'★'.repeat(Math.round(Number(sel.rating)))}
-      </span>
-      <span className="font-bold">{Number(sel.rating).toFixed(1)}</span>
-      <span className="text-[13px] text-slate-400">
-        외부 평점 · {(sel.review_count || 0).toLocaleString()}개
-      </span>
-    </div>
-  </div>
-)}
+              {sel.rating > 0 && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400">
+                      {'★'.repeat(Math.round(Number(sel.rating)))}
+                    </span>
+                    <span className="font-bold">{Number(sel.rating).toFixed(1)}</span>
+                    <span className="text-[13px] text-slate-400">
+                      외부 평점 · {(sel.review_count || 0).toLocaleString()}개
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {sel.description_kr && (
                 <p className="text-[13px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">
@@ -763,24 +779,24 @@ export default function Home() {
             </div>
 
             <div className="px-5 py-2 space-y-3">
-{sel.address && (
-  <div className="flex gap-3 py-2">
-    <span>📍</span>
-    <div>
-      <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-        주소
-      </div>
-      <a
-        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sel.address)}`}
-        target="_blank"
-        rel="noreferrer"
-        className="inline text-[14px] font-semibold text-indigo-600 underline"
-      >
-        {sel.address}
-      </a>
-    </div>
-  </div>
-)}
+              {sel.address && (
+                <div className="flex gap-3 py-2">
+                  <span>📍</span>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      주소
+                    </div>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sel.address)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline text-[14px] font-semibold text-indigo-600 underline"
+                    >
+                      {sel.address}
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {sel.phone && (
                 <div className="flex gap-3 py-2">
