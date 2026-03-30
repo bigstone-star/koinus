@@ -95,12 +95,62 @@ export default function HomeClient() {
     setCat(catFromUrl || '전체')
   }, [searchParams])
 
-  const changeCategory = (nextCat: string) => {
-    if (nextCat === '전체') {
-      router.push('/')
-    } else {
-      router.push(`/?cat=${encodeURIComponent(nextCat)}`)
+  useEffect(() => {
+    const qFromUrl = searchParams.get('q') || ''
+    if (qFromUrl !== search) {
+      setSearch(qFromUrl)
     }
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const changeCategory = (nextCat: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+
+    if (nextCat === '전체') params.delete('cat')
+    else params.set('cat', nextCat)
+
+    params.delete('biz')
+
+    const query = params.toString()
+    router.push(query ? `/?${query}` : '/')
+  }
+
+  const updateSearchQuery = (nextSearch: string) => {
+    setSearch(nextSearch)
+    const params = new URLSearchParams(searchParams.toString())
+
+    if (nextSearch.trim()) params.set('q', nextSearch)
+    else params.delete('q')
+
+    const query = params.toString()
+    router.push(query ? `/?${query}` : '/')
+  }
+
+  const openBusinessModal = async (b: any) => {
+    setSel(b)
+    await loadReviews(b.id)
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('biz', b.id)
+
+    const query = params.toString()
+    router.push(query ? `/?${query}` : '/')
+  }
+
+  const closeModal = () => {
+    setSel(null)
+    setReviews([])
+    setMyReview(null)
+    setReviewForm({
+      rating: 5,
+      review_text: '',
+      tags: [],
+    })
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('biz')
+
+    const query = params.toString()
+    router.push(query ? `/?${query}` : '/')
   }
 
   useEffect(() => {
@@ -295,6 +345,19 @@ export default function HomeClient() {
     setReviewLoading(false)
   }, [user])
 
+  useEffect(() => {
+    const bizId = searchParams.get('biz')
+    if (!bizId || biz.length === 0) return
+
+    if (sel?.id === bizId) return
+
+    const target = biz.find((b) => b.id === bizId)
+    if (target) {
+      setSel(target)
+      loadReviews(target.id)
+    }
+  }, [searchParams, biz, sel, loadReviews])
+
   const toggleReviewTag = (tag: string) => {
     setReviewForm((prev) => {
       const exists = prev.tags.includes(tag)
@@ -334,15 +397,10 @@ export default function HomeClient() {
     let error = null
 
     if (myReview) {
-      const res = await sb
-        .from('reviews')
-        .update(payload)
-        .eq('id', myReview.id)
+      const res = await sb.from('reviews').update(payload).eq('id', myReview.id)
       error = res.error
     } else {
-      const res = await sb
-        .from('reviews')
-        .insert(payload)
+      const res = await sb.from('reviews').insert(payload)
       error = res.error
     }
 
@@ -387,26 +445,6 @@ export default function HomeClient() {
     }
   }
 
-  const closeModal = () => {
-    setSel(null)
-    setReviews([])
-    setMyReview(null)
-    setReviewForm({
-      rating: 5,
-      review_text: '',
-      tags: [],
-    })
-  }
-
-  const currentTopBanner =
-    topBanners.length > 0 ? topBanners[topBannerIndex] : null
-
-  const currentMiddleBanner =
-    middleBanners.length > 0 ? middleBanners[middleBannerIndex] : null
-
-  const currentBottomBanner =
-    bottomBanners.length > 0 ? bottomBanners[bottomBannerIndex] : null
-
   const renderBanner = (banner: any, className = '') => {
     if (!banner) return null
 
@@ -444,6 +482,15 @@ export default function HomeClient() {
     reviews.length > 0
       ? reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length
       : 0
+
+  const currentTopBanner =
+    topBanners.length > 0 ? topBanners[topBannerIndex] : null
+
+  const currentMiddleBanner =
+    middleBanners.length > 0 ? middleBanners[middleBannerIndex] : null
+
+  const currentBottomBanner =
+    bottomBanners.length > 0 ? bottomBanners[bottomBannerIndex] : null
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
@@ -505,7 +552,7 @@ export default function HomeClient() {
             <span className="text-white/40">🔍</span>
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => updateSearchQuery(e.target.value)}
               placeholder="업소명, 한글명, 업종, 주소, 전화번호 검색..."
               className="bg-transparent border-none outline-none text-white text-[14px] w-full py-2.5 placeholder:text-white/30"
             />
@@ -609,10 +656,7 @@ export default function HomeClient() {
             return (
               <div key={b.id}>
                 <div
-                  onClick={async () => {
-                    setSel(b)
-                    await loadReviews(b.id)
-                  }}
+                  onClick={() => openBusinessModal(b)}
                   className={`bg-white rounded-xl border px-4 py-3.5 flex gap-3 cursor-pointer active:scale-[.99] transition-all ${
                     b.is_vip
                       ? 'border-amber-300 bg-amber-50/30'
@@ -735,10 +779,7 @@ export default function HomeClient() {
         >
           <div className="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto pb-10">
             <div className="flex justify-end px-5 pt-4">
-              <button
-                onClick={closeModal}
-                className="text-slate-400 text-2xl"
-              >
+              <button onClick={closeModal} className="text-slate-400 text-2xl">
                 ✕
               </button>
             </div>
@@ -787,7 +828,9 @@ export default function HomeClient() {
                       주소
                     </div>
                     <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sel.address)}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        sel.address
+                      )}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline text-[14px] font-semibold text-indigo-600 underline"
