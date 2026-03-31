@@ -37,6 +37,11 @@ export default function OwnerBusinessDetailPage({
   const [user, setUser] = useState<any>(null)
   const [business, setBusiness] = useState<BusinessRow | null>(null)
   const [requesting, setRequesting] = useState(false)
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [website, setWebsite] = useState('')
+  const [desc, setDesc] = useState('')
+  const [comment, setComment] = useState('')
 
   useEffect(() => {
     const init = async () => {
@@ -91,6 +96,14 @@ export default function OwnerBusinessDetailPage({
   }, [businessId])
 
   const requestPhoneEdit = async () => {
+  const handleSubmit = async () => {
+  if (!phone && !address && !website && !desc) {
+    alert('수정할 내용을 입력하세요')
+    return
+  }
+
+  // 여기서 supabase insert 실행
+}  
     if (!user?.id || !business) return
 
     const newPhone = prompt(
@@ -218,7 +231,7 @@ export default function OwnerBusinessDetailPage({
           <div className="text-[13px] font-bold text-slate-800 mb-3">수정 요청</div>
 
           <button
-            onClick={requestPhoneEdit}
+            onClick={handleSubmit}
             disabled={requesting}
             className="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-[13px] font-bold disabled:opacity-50"
           >
