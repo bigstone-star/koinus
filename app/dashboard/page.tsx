@@ -339,7 +339,7 @@ export default function DashboardPage() {
 
               <div className="flex gap-2 mt-4">
                 <a
-                  href={`/dashboard/businesses/${b.id}`}
+                  href={`/dashboard/business/${b.id}`}
                   className="flex-1 text-center bg-indigo-50 text-indigo-600 py-2 rounded-lg text-[13px] font-bold"
                   >
                   보기
