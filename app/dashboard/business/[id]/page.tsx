@@ -37,6 +37,7 @@ export default function OwnerBusinessDetailPage({
   const [user, setUser] = useState<any>(null)
   const [business, setBusiness] = useState<BusinessRow | null>(null)
   const [requesting, setRequesting] = useState(false)
+
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [website, setWebsite] = useState('')
@@ -84,6 +85,11 @@ export default function OwnerBusinessDetailPage({
         }
 
         setBusiness(data)
+
+        setPhone(data.phone || '')
+        setAddress(data.address || '')
+        setWebsite(data.website || '')
+        setDesc(data.description_kr || '')
       } catch (e) {
         console.error(e)
         setErrorMsg('업소 정보를 불러오는 중 오류가 발생했습니다.')
@@ -95,25 +101,29 @@ export default function OwnerBusinessDetailPage({
     init()
   }, [businessId])
 
-  const requestPhoneEdit = async () => {
   const handleSubmit = async () => {
-  if (!phone && !address && !website && !desc) {
-    alert('수정할 내용을 입력하세요')
-    return
-  }
-
-  // 여기서 supabase insert 실행
-}  
     if (!user?.id || !business) return
 
-    const newPhone = prompt(
-      `새 전화번호를 입력하세요\n\n현재 전화번호: ${business.phone || '없음'}`
-    )
+    const trimmedPhone = phone.trim()
+    const trimmedAddress = address.trim()
+    const trimmedWebsite = website.trim()
+    const trimmedDesc = desc.trim()
+    const trimmedComment = comment.trim()
 
-    if (!newPhone) return
+    const changedPhone = trimmedPhone !== (business.phone || '')
+    const changedAddress = trimmedAddress !== (business.address || '')
+    const changedWebsite = trimmedWebsite !== (business.website || '')
+    const changedDesc = trimmedDesc !== (business.description_kr || '')
 
-    const trimmed = newPhone.trim()
-    if (!trimmed) return
+    if (!changedPhone && !changedAddress && !changedWebsite && !changedDesc) {
+      alert('수정할 내용을 입력하세요')
+      return
+    }
+
+    if (!trimmedComment) {
+      alert('관리자에게 전달할 코멘트를 입력하세요')
+      return
+    }
 
     try {
       setRequesting(true)
@@ -121,10 +131,17 @@ export default function OwnerBusinessDetailPage({
       const { error } = await sb.from('business_edits').insert({
         business_id: business.id,
         user_id: user.id,
-        phone: trimmed,
+        phone: changedPhone ? trimmedPhone : null,
+        address: changedAddress ? trimmedAddress : null,
+        website: changedWebsite ? trimmedWebsite : null,
+        description_kr: changedDesc ? trimmedDesc : null,
+        message: trimmedComment,
         status: 'pending',
         original_data: {
           phone: business.phone || null,
+          address: business.address || null,
+          website: business.website || null,
+          description_kr: business.description_kr || null,
         },
       })
 
@@ -133,7 +150,8 @@ export default function OwnerBusinessDetailPage({
         return
       }
 
-      alert('✅ 전화 수정 요청이 접수되었습니다.')
+      alert('✅ 수정 요청이 접수되었습니다. 관리자 승인 후 반영됩니다.')
+      setComment('')
     } finally {
       setRequesting(false)
     }
@@ -218,28 +236,71 @@ export default function OwnerBusinessDetailPage({
           </div>
         </div>
 
-        {business.description_kr && (
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-[13px] font-bold text-slate-800 mb-2">설명</div>
-            <div className="text-[13px] text-slate-600 leading-relaxed">
-              {business.description_kr}
-            </div>
-          </div>
-        )}
-
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="text-[13px] font-bold text-slate-800 mb-3">수정 요청</div>
+          <div className="text-[13px] font-bold text-slate-800 mb-3">정보 수정 요청</div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={requesting}
-            className="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-[13px] font-bold disabled:opacity-50"
-          >
-            {requesting ? '요청 중...' : '전화 수정 요청'}
-          </button>
+          <div className="space-y-4">
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 mb-1">전화번호</div>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                placeholder="전화번호 입력"
+              />
+            </div>
 
-          <div className="text-[11px] text-slate-400 mt-3">
-            다음에는 주소, 웹사이트, 설명 수정 요청도 추가할 수 있습니다.
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 mb-1">주소</div>
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                placeholder="주소 입력"
+              />
+            </div>
+
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 mb-1">웹사이트</div>
+              <input
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
+                placeholder="웹사이트 입력"
+              />
+            </div>
+
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 mb-1">설명</div>
+              <textarea
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                rows={4}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] resize-none"
+                placeholder="업소 설명 입력"
+              />
+            </div>
+
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 mb-1">
+                관리자에게 전달할 코멘트
+              </div>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] resize-none"
+                placeholder="예: 전화번호와 주소를 최신 정보로 변경 요청드립니다."
+              />
+            </div>
+
+            <button
+              onClick={handleSubmit}
+              disabled={requesting}
+              className="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-[13px] font-bold disabled:opacity-50"
+            >
+              {requesting ? '요청 중...' : '수정 요청 제출'}
+            </button>
           </div>
         </div>
       </div>
