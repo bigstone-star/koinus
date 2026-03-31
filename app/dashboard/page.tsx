@@ -101,41 +101,6 @@ export default function DashboardPage() {
     init()
   }, [])
 
-    if (!user?.id) return
-
-    const newPhone = prompt(
-      `새 전화번호를 입력하세요\n\n현재 전화번호: ${b.phone || '없음'}`
-    )
-
-    if (!newPhone) return
-
-    const trimmed = newPhone.trim()
-    if (!trimmed) return
-
-    try {
-      setRequestingId(b.id)
-
-      const { error } = await sb.from('business_edits').insert({
-        business_id: b.id,
-        user_id: user.id,
-        phone: trimmed,
-        status: 'pending',
-        original_data: {
-          phone: b.phone || null,
-        },
-      })
-
-      if (error) {
-        alert('수정 요청 실패: ' + error.message)
-        return
-      }
-
-      alert('✅ 수정 요청이 접수되었습니다. 관리자 승인 후 반영됩니다.')
-    } finally {
-      setRequestingId('')
-    }
-  }
-
   const requestOwnerClaimFromDashboard = async () => {
     if (!user?.id) return
 
@@ -336,14 +301,13 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-4">
-  <a
-    href={`/dashboard/business/${b.id}`}
-    className="block w-full text-center bg-indigo-600 text-white py-2 rounded-lg text-[13px] font-bold"
-  >
-    정보 수정
-  </a>
-</div>
-
+                <a
+                  href={`/dashboard/business/${b.id}`}
+                  className="block w-full text-center bg-indigo-600 text-white py-2 rounded-lg text-[13px] font-bold"
+                >
+                  정보 수정
+                </a>
+              </div>
             </div>
           ))
         )}
@@ -353,7 +317,7 @@ export default function DashboardPage() {
             다음 단계
           </div>
           <div className="text-[12px] text-slate-500">
-            다음에는 주소, 웹사이트, 설명까지 수정 요청할 수 있게 확장합니다.
+            다음에는 조회 통계, 리뷰 관리, VIP 기능을 더 확장할 수 있습니다.
           </div>
         </div>
       </div>
