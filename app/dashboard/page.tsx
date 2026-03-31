@@ -24,12 +24,21 @@ type BusinessRow = {
   owner_id?: string | null
 }
 
+type UserProfile = {
+  id: string
+  email?: string | null
+  name?: string | null
+  role?: string | null
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [businesses, setBusinesses] = useState<BusinessRow[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [requestingId, setRequestingId] = useState('')
+  const [claimLoading, setClaimLoading] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -42,6 +51,20 @@ export default function DashboardPage() {
         }
 
         setUser(data.user)
+
+        const { data: profileData, error: profileError } = await sb
+          .from('user_profiles')
+          .select('id, email, name, role')
+          .eq('id', data.user.id)
+          .maybeSingle()
+
+        if (profileError) {
+          setErrorMsg('회원 정보를 불러오지 못했습니다.')
+          setLoading(false)
+          return
+        }
+
+        setProfile(profileData)
 
         const { data: biz, error } = await sb
           .from('businesses')
@@ -115,6 +138,94 @@ export default function DashboardPage() {
     }
   }
 
+  const requestOwnerClaimFromDashboard = async () => {
+    if (!user?.id) return
+
+    const businessName = prompt('오너 자격을 요청할 업소명을 입력하세요')
+    if (!businessName || !businessName.trim()) return
+
+    const message = prompt(
+      '요청 메시지를 입력하세요.\n예: 안녕하세요. 이 업소의 실제 운영자입니다. 확인 후 오너 권한 부탁드립니다.'
+    )
+    if (!message || !message.trim()) return
+
+    try {
+      setClaimLoading(true)
+
+      const searchTerm = businessName.trim()
+
+      const { data: foundBusinesses, error: findError } = await sb
+        .from('businesses')
+        .select('id, name_kr, name_en')
+        .or(
+          [
+            `name_kr.ilike.%${searchTerm}%`,
+            `name_en.ilike.%${searchTerm}%`,
+          ].join(',')
+        )
+        .limit(10)
+
+      if (findError) {
+        alert('업소 검색 실패: ' + findError.message)
+        return
+      }
+
+      if (!foundBusinesses || foundBusinesses.length === 0) {
+        alert('해당 업소를 찾지 못했습니다. 업소명을 더 정확히 입력해 주세요.')
+        return
+      }
+
+      if (foundBusinesses.length > 1) {
+        const names = foundBusinesses
+          .map((b, i) => `${i + 1}. ${b.name_kr || b.name_en}`)
+          .join('\n')
+
+        alert(
+          `동일하거나 유사한 업소가 여러 개 있습니다.\n\n${names}\n\n먼저 홈 화면에서 해당 업소 상세를 연 뒤 "이 업소는 제 것입니다" 버튼으로 요청해 주세요.`
+        )
+        return
+      }
+
+      const business = foundBusinesses[0]
+
+      const { data: existing, error: existingError } = await sb
+        .from('business_claim_requests')
+        .select('id, status')
+        .eq('business_id', business.id)
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
+        .limit(1)
+
+      if (existingError) {
+        alert('기존 요청 확인 실패: ' + existingError.message)
+        return
+      }
+
+      if (existing && existing.length > 0) {
+        alert('이미 대기 중인 오너 자격 요청이 있습니다.')
+        return
+      }
+
+      const { error } = await sb
+        .from('business_claim_requests')
+        .insert({
+          business_id: business.id,
+          user_id: user.id,
+          message: message.trim(),
+          status: 'pending',
+        })
+
+      if (error) {
+        alert('오너 자격 요청 실패: ' + error.message)
+        return
+      }
+
+      alert('✅ 오너 자격 요청이 접수되었습니다. 관리자 확인 후 승인됩니다.')
+    } finally {
+      setClaimLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
@@ -148,13 +259,48 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {profile && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="text-[14px] font-bold text-slate-800">
+              {profile.name || '이름 없음'}
+            </div>
+            <div className="text-[12px] text-slate-500 mt-1">
+              {profile.email || '이메일 없음'}
+            </div>
+            <div className="mt-2">
+              <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-1 rounded">
+                현재 권한: {profile.role || 'user'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {businesses.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
             <div className="text-[14px] font-bold text-slate-700">
               연결된 업소가 없습니다
             </div>
             <div className="text-[12px] text-slate-400 mt-2">
-              관리자에게 업소 연결 요청을 해주세요
+              아직 이 계정에 연결된 업소가 없습니다.
+            </div>
+
+            <div className="mt-4">
+              <button
+                onClick={requestOwnerClaimFromDashboard}
+                disabled={claimLoading}
+                className="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-[13px] font-bold disabled:opacity-50"
+              >
+                {claimLoading ? '요청 중...' : '오너 자격 요청하기'}
+              </button>
+            </div>
+
+            <div className="text-[11px] text-slate-400 mt-3 leading-relaxed">
+              홈 화면에서 해당 업소 상세를 열고
+              <br />
+              <span className="font-bold text-slate-500">
+                “이 업소는 제 것입니다”
+              </span>
+              버튼으로도 요청할 수 있습니다.
             </div>
           </div>
         ) : (
