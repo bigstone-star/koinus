@@ -11,48 +11,32 @@ const sb = createClient(
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
-  const [biz, setBiz] = useState<any[]>([])
-  const [bizCount, setBizCount] = useState(0)
-  const [vipCount, setVipCount] = useState(0)
-  const [pendingEdits, setPendingEdits] = useState(0)
+  const [businesses, setBusinesses] = useState<any[]>([])
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     const init = async () => {
-      const { data: auth } = await sb.auth.getUser()
+      const { data } = await sb.auth.getUser()
 
-      if (!auth.user) {
+      if (!data.user) {
         window.location.href = '/auth/login'
         return
       }
 
-      setUser(auth.user)
+      setUser(data.user)
 
-      const [bizRes, vipRes, editRes] = await Promise.all([
-        sb
-          .from('businesses')
-          .select('*')
-          .eq('owner_id', auth.user.id)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false }),
+      // 👉 내 업소 가져오기
+      const { data: biz, error } = await sb
+        .from('businesses')
+        .select('*')
+        .eq('owner_id', data.user.id)
+        .order('created_at', { ascending: false })
 
-        sb
-          .from('businesses')
-          .select('id', { count: 'exact', head: true })
-          .eq('owner_id', auth.user.id)
-          .eq('is_vip', true)
-          .eq('is_active', true),
-
-        sb
-          .from('business_edits')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', auth.user.id)
-          .eq('status', 'pending'),
-      ])
-
-      setBiz(bizRes.data || [])
-      setBizCount((bizRes.data || []).length)
-      setVipCount(vipRes.count || 0)
-      setPendingEdits(editRes.count || 0)
+      if (error) {
+        setErrorMsg('업소 정보를 불러오지 못했습니다.')
+      } else {
+        setBusinesses(biz || [])
+      }
 
       setLoading(false)
     }
@@ -70,143 +54,114 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto pb-10">
-      <div className="bg-[#1a1a2e] px-5 pt-10 pb-6 flex items-start justify-between gap-3">
+      
+      {/* 헤더 */}
+      <div className="bg-[#1a1a2e] px-5 pt-10 pb-6 flex justify-between items-center">
         <div>
-          <h1 className="text-[20px] font-extrabold text-white">👤 내 비즈니스</h1>
+          <h1 className="text-[20px] font-extrabold text-white">내 업소 관리</h1>
           <p className="text-white/40 text-[12px] mt-1">
-            업소 연결, 수정 요청, VIP 관리
+            내 업소 정보 확인 및 수정
           </p>
         </div>
 
         <a
           href="/"
-          className="text-white/40 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
+          className="text-white/70 text-[12px] border border-white/20 px-3 py-1.5 rounded-lg"
         >
           홈
         </a>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 px-4 mt-4">
-        <div className="bg-white rounded-xl border p-3 text-center">
-          <div className="text-[20px] font-extrabold text-slate-800">{bizCount}</div>
-          <div className="text-[10px] text-slate-400">내 업소</div>
-        </div>
+      <div className="px-4 pt-4 space-y-4">
 
-        <div className="bg-white rounded-xl border p-3 text-center">
-          <div className="text-[20px] font-extrabold text-amber-600">{vipCount}</div>
-          <div className="text-[10px] text-slate-400">VIP</div>
-        </div>
-
-        <div className="bg-white rounded-xl border p-3 text-center">
-          <div className="text-[20px] font-extrabold text-indigo-600">{pendingEdits}</div>
-          <div className="text-[10px] text-slate-400">수정 대기</div>
-        </div>
-      </div>
-
-      <div className="px-4 mt-4 space-y-3">
-        {biz.length > 0 ? (
-          <>
-            {biz.map((b) => (
-              <a
-                key={b.id}
-                href={`/dashboard/business/${b.id}`}
-                className="block bg-white rounded-xl border border-slate-200 px-4 py-4 hover:bg-slate-50"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl">🏢</div>
-                  <div className="min-w-0">
-                    <div className="text-[14px] font-bold text-slate-800">
-                      {b.name_kr || b.name_en}
-                    </div>
-
-                    <div className="text-[12px] text-slate-400 mt-1">
-                      {b.category_main || '카테고리 없음'}
-                    </div>
-
-                    {b.phone && (
-                      <div className="text-[12px] text-slate-400 mt-1">{b.phone}</div>
-                    )}
-
-                    {b.is_vip && (
-                      <div className="text-[11px] text-amber-600 font-bold mt-1">
-                        ⭐ VIP 업소
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </a>
-            ))}
-          </>
-        ) : (
-          <div className="bg-white rounded-xl border border-slate-200 px-4 py-6 text-center">
-            <div className="text-[14px] font-bold text-slate-700">
-              아직 연결된 내 업소가 없습니다
-            </div>
-            <div className="text-[12px] text-slate-400 mt-1">
-              기존 업소를 찾거나 새 업소를 등록하세요
-            </div>
+        {/* 에러 */}
+        {errorMsg && (
+          <div className="bg-red-100 text-red-600 p-3 rounded-lg text-sm">
+            {errorMsg}
           </div>
         )}
 
-        <a
-          href="/register"
-          className="block bg-indigo-600 text-white rounded-xl px-4 py-4"
-        >
-          <div className="flex gap-3">
-            <div className="text-2xl">➕</div>
-            <div>
-              <div className="text-[14px] font-bold">새 업소 등록</div>
-              <div className="text-[12px] text-white/70 mt-1">
-                내 업소를 새로 등록합니다
-              </div>
+        {/* 업소 없음 */}
+        {businesses.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
+            <div className="text-[14px] font-bold text-slate-700">
+              연결된 업소가 없습니다
+            </div>
+            <div className="text-[12px] text-slate-400 mt-2">
+              관리자에게 업소 연결 요청을 해주세요
             </div>
           </div>
-        </a>
+        ) : (
+          businesses.map((b) => (
+            <div
+              key={b.id}
+              className="bg-white rounded-xl border border-slate-200 p-4"
+            >
+              {/* 제목 */}
+              <div className="text-[16px] font-bold text-slate-900 flex items-center gap-2">
+                {b.name_kr || b.name_en}
 
-        <a
-          href="/dashboard/claim"
-          className="block bg-white rounded-xl border border-slate-200 px-4 py-4 hover:bg-slate-50"
-        >
-          <div className="flex gap-3">
-            <div className="text-2xl">🏷️</div>
-            <div>
-              <div className="text-[14px] font-bold text-slate-800">내 업소 찾기</div>
-              <div className="text-[12px] text-slate-400 mt-1">
-                이미 등록된 업소를 내 계정으로 연결
+                {b.is_vip && (
+                  <span className="text-[10px] bg-amber-300 text-amber-900 px-2 py-0.5 rounded font-bold">
+                    ⭐ {b.vip_tier?.toUpperCase() || 'VIP'}
+                  </span>
+                )}
               </div>
-            </div>
-          </div>
-        </a>
 
-        <a
-          href="/dashboard/edits"
-          className="block bg-white rounded-xl border border-slate-200 px-4 py-4 hover:bg-slate-50"
-        >
-          <div className="flex gap-3">
-            <div className="text-2xl">📄</div>
-            <div>
-              <div className="text-[14px] font-bold text-slate-800">수정 요청 내역</div>
-              <div className="text-[12px] text-slate-400 mt-1">
-                내가 보낸 수정 요청 상태 확인
+              {/* 정보 */}
+              <div className="text-[12px] text-slate-500 mt-2 space-y-1">
+                {b.category_main && <div>{b.category_main}</div>}
+                {b.phone && <div>{b.phone}</div>}
+                {b.address && <div>{b.address}</div>}
               </div>
-            </div>
-          </div>
-        </a>
 
-        <a
-          href="/pricing"
-          className="block bg-gradient-to-r from-amber-400 to-orange-400 rounded-xl px-4 py-4"
-        >
-          <div className="flex gap-3 text-white">
-            <div className="text-2xl">⭐</div>
-            <div>
-              <div className="text-[14px] font-extrabold">VIP 업그레이드</div>
-              <div className="text-[12px] text-white/80 mt-1">
-                상단 노출 + 광고 효과
+              {/* 상태 */}
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {!b.approved && (
+                  <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded font-bold">
+                    승인 대기
+                  </span>
+                )}
+
+                {b.is_active === false && (
+                  <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold">
+                    비활성
+                  </span>
+                )}
+              </div>
+
+              {/* 버튼 */}
+              <div className="flex gap-2 mt-4">
+                <a
+                  href={`/business/${b.id}`}
+                  className="flex-1 text-center bg-indigo-50 text-indigo-600 py-2 rounded-lg text-[13px] font-bold"
+                >
+                  보기
+                </a>
+
+                <button
+                  onClick={() =>
+                    alert('다음 단계에서 수정 요청 기능 연결 예정')
+                  }
+                  className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[13px] font-bold"
+                >
+                  수정 요청
+                </button>
               </div>
             </div>
+          ))
+        )}
+
+        {/* 다음 확장 */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="text-[13px] font-bold text-slate-800 mb-2">
+            다음 단계
           </div>
-        </a>
+          <div className="text-[12px] text-slate-500">
+            리뷰 관리, VIP 결제, 업소 통계 기능이 여기에 추가됩니다.
+          </div>
+        </div>
+
       </div>
     </div>
   )
