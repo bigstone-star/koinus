@@ -16,6 +16,7 @@ type EditRow = {
   address?: string | null
   website?: string | null
   description_kr?: string | null
+  message?: string | null
   status?: string | null
   original_data?: any
   created_at?: string | null
@@ -29,6 +30,7 @@ type EditRow = {
     phone?: string | null
     address?: string | null
     website?: string | null
+    description_kr?: string | null
   } | null
 
   user?: {
@@ -112,7 +114,7 @@ export default function AdminEditsPage() {
       if (businessIds.length > 0) {
         const { data: bizData } = await sb
           .from('businesses')
-          .select('id, name_kr, name_en, phone, address, website')
+          .select('id, name_kr, name_en, phone, address, website, description_kr')
           .in('id', businessIds)
 
         ;(bizData || []).forEach((b: any) => {
@@ -235,6 +237,33 @@ export default function AdminEditsPage() {
     }
   }
 
+  const renderCompareBlock = (
+    label: string,
+    currentValue?: string | null,
+    requestedValue?: string | null
+  ) => {
+    const currentText = currentValue?.trim() || '없음'
+    const requestedText =
+      requestedValue === undefined || requestedValue === null || requestedValue === ''
+        ? '변경 없음'
+        : requestedValue
+
+    return (
+      <div className="bg-slate-50 rounded-lg p-3">
+        <div className="text-[11px] font-bold text-slate-400 mb-1">{label}</div>
+        <div className="text-[12px] text-slate-500">
+          현재: <span className="font-bold text-slate-700 whitespace-pre-wrap">{currentText}</span>
+        </div>
+        <div className="text-[12px] text-indigo-600 mt-1">
+          요청:{' '}
+          <span className="font-bold whitespace-pre-wrap">
+            {requestedText}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
@@ -297,93 +326,106 @@ export default function AdminEditsPage() {
             수정 요청이 없습니다.
           </div>
         ) : (
-          rows.map((row) => {
-            const currentPhone =
-              row.original_data?.phone ??
-              row.business?.phone ??
-              '없음'
-
-            const requestedPhone =
-              row.phone ?? '변경 없음'
-
-            return (
-              <div
-                key={row.id}
-                className="bg-white rounded-xl border border-slate-200 p-4"
-              >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[15px] font-bold text-slate-900">
-                      {row.business?.name_kr || row.business?.name_en || '업소명 없음'}
-                    </div>
-
-                    <div className="text-[12px] text-slate-500 mt-1">
-                      요청자: {row.user?.name || '이름 없음'} · {row.user?.email || '이메일 없음'}
-                    </div>
-
-                    <div className="text-[11px] text-slate-400 mt-1">
-                      요청일: {row.created_at ? new Date(row.created_at).toLocaleString() : '-'}
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      <div className="bg-slate-50 rounded-lg p-3">
-                        <div className="text-[11px] font-bold text-slate-400 mb-1">전화번호</div>
-                        <div className="text-[12px] text-slate-500">
-                          현재: <span className="font-bold text-slate-700">{currentPhone}</span>
-                        </div>
-                        <div className="text-[12px] text-indigo-600 mt-1">
-                          요청: <span className="font-bold">{requestedPhone}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`text-[11px] px-2 py-1 rounded font-bold ${
-                            row.status === 'approved'
-                              ? 'bg-green-100 text-green-700'
-                              : row.status === 'rejected'
-                              ? 'bg-red-100 text-red-600'
-                              : 'bg-yellow-100 text-yellow-700'
-                          }`}
-                        >
-                          {row.status === 'approved'
-                            ? '승인됨'
-                            : row.status === 'rejected'
-                            ? '반려됨'
-                            : '대기중'}
-                        </span>
-
-                        <a
-                          href={`/admin/businesses/${row.business_id}`}
-                          className="text-[11px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold"
-                        >
-                          업소 보기
-                        </a>
-                      </div>
-                    </div>
+          rows.map((row) => (
+            <div
+              key={row.id}
+              className="bg-white rounded-xl border border-slate-200 p-4"
+            >
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-bold text-slate-900">
+                    {row.business?.name_kr || row.business?.name_en || '업소명 없음'}
                   </div>
 
-                  <div className="flex flex-col gap-2 min-w-[120px]">
-                    <button
-                      onClick={() => approveEdit(row)}
-                      disabled={actingId === row.id || row.status !== 'pending'}
-                      className="bg-green-600 text-white px-3 py-2 rounded-lg text-[12px] font-bold disabled:opacity-50"
-                    >
-                      승인
-                    </button>
+                  <div className="text-[12px] text-slate-500 mt-1">
+                    요청자: {row.user?.name || '이름 없음'} · {row.user?.email || '이메일 없음'}
+                  </div>
 
-                    <button
-                      onClick={() => rejectEdit(row)}
-                      disabled={actingId === row.id || row.status !== 'pending'}
-                      className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-[12px] font-bold disabled:opacity-50"
-                    >
-                      반려
-                    </button>
+                  <div className="text-[11px] text-slate-400 mt-1">
+                    요청일: {row.created_at ? new Date(row.created_at).toLocaleString() : '-'}
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {renderCompareBlock(
+                      '전화번호',
+                      row.original_data?.phone ?? row.business?.phone,
+                      row.phone
+                    )}
+
+                    {renderCompareBlock(
+                      '주소',
+                      row.original_data?.address ?? row.business?.address,
+                      row.address
+                    )}
+
+                    {renderCompareBlock(
+                      '웹사이트',
+                      row.original_data?.website ?? row.business?.website,
+                      row.website
+                    )}
+
+                    {renderCompareBlock(
+                      '설명',
+                      row.original_data?.description_kr ?? row.business?.description_kr,
+                      row.description_kr
+                    )}
+
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <div className="text-[11px] font-bold text-slate-400 mb-1">
+                        관리자에게 전달한 코멘트
+                      </div>
+                      <div className="text-[12px] text-slate-700 whitespace-pre-wrap">
+                        {row.message?.trim() || '코멘트 없음'}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[11px] px-2 py-1 rounded font-bold ${
+                          row.status === 'approved'
+                            ? 'bg-green-100 text-green-700'
+                            : row.status === 'rejected'
+                            ? 'bg-red-100 text-red-600'
+                            : 'bg-yellow-100 text-yellow-700'
+                        }`}
+                      >
+                        {row.status === 'approved'
+                          ? '승인됨'
+                          : row.status === 'rejected'
+                          ? '반려됨'
+                          : '대기중'}
+                      </span>
+
+                      <a
+                        href={`/admin/businesses/${row.business_id}`}
+                        className="text-[11px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold"
+                      >
+                        업소 보기
+                      </a>
+                    </div>
                   </div>
                 </div>
+
+                <div className="flex flex-col gap-2 min-w-[120px]">
+                  <button
+                    onClick={() => approveEdit(row)}
+                    disabled={actingId === row.id || row.status !== 'pending'}
+                    className="bg-green-600 text-white px-3 py-2 rounded-lg text-[12px] font-bold disabled:opacity-50"
+                  >
+                    승인
+                  </button>
+
+                  <button
+                    onClick={() => rejectEdit(row)}
+                    disabled={actingId === row.id || row.status !== 'pending'}
+                    className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-[12px] font-bold disabled:opacity-50"
+                  >
+                    반려
+                  </button>
+                </div>
               </div>
-            )
-          })
+            </div>
+          ))
         )}
       </div>
     </div>
