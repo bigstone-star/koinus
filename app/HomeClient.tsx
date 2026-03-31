@@ -590,7 +590,7 @@ export default function HomeClient() {
             )}
 
             <p className="text-[11px] text-white/40 mt-0.5">
-              Houston, TX · 한인 비즈니스 디렉토리
+              Houston 한인 비즈니스
             </p>
           </div>
 
