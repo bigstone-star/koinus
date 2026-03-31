@@ -160,6 +160,12 @@ export default function AdminPage() {
 
   const quickMenus = [
     {
+  href: '/admin/users',
+  icon: '👥',
+  title: '회원 관리',
+  desc: '권한, 상태, 업소 연결 관리',
+},
+    {
       href: '/admin/businesses',
       icon: '🏢',
       title: '업소 관리',
