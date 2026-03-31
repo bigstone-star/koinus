@@ -341,22 +341,21 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <a
-  href={`/?biz=${b.id}`}
-  className="flex-1 text-center bg-indigo-50 text-indigo-600 py-2 rounded-lg text-[13px] font-bold"
->
-  보기
-</a>
-
-                <button
-                  onClick={() => requestPhoneEdit(b)}
-                  disabled={requestingId === b.id}
-                  className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[13px] font-bold disabled:opacity-50"
-                >
-                  {requestingId === b.id ? '요청 중...' : '전화 수정 요청'}
-                </button>
-              </div>
-            </div>
+           <div className="flex gap-2 mt-4">
+             <a
+               href={`/?biz=${b.id}`}
+               className="flex-1 text-center bg-indigo-50 text-indigo-600 py-2 rounded-lg text-[13px] font-bold"
+               >
+               보기
+             </a>
+             <button
+               onClick={() => requestPhoneEdit(b)}
+               disabled={requestingId === b.id}
+               className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-[13px] font-bold disabled:opacity-50"
+               >
+               {requestingId === b.id ? '요청 중...' : '전화 수정 요청'}
+             </button>
+           </div>
           ))
         )}
 
