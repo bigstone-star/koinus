@@ -42,6 +42,24 @@ const REGIONS = [
   { value: 'fort_worth', label: 'Fort Worth' },
 ]
 
+const REGION_META: Record<
+  string,
+  { title: string; subtitle: string }
+> = {
+  houston: {
+    title: '교차로 휴스턴',
+    subtitle: 'Houston, TX · 한인 비즈니스 디렉토리',
+  },
+  dallas: {
+    title: '교차로 달라스',
+    subtitle: 'Dallas, TX · 한인 비즈니스 디렉토리',
+  },
+  fort_worth: {
+    title: '교차로 포트워스',
+    subtitle: 'Fort Worth, TX · 한인 비즈니스 디렉토리',
+  },
+}
+
 type Category = {
   id: string
   name: string
@@ -521,7 +539,13 @@ export default function Home() {
       ? reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) /
         reviews.length
       : 0
+const regionMeta = REGION_META[region] || REGION_META.houston
+const displaySiteName =
+  headerLogoUrl && !showTextLogo ? siteName : regionMeta.title
 
+return (
+  <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
+    
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
       <header className="bg-[#1a1a2e] sticky top-0 z-40 shadow-xl">
