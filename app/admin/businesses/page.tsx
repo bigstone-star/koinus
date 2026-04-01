@@ -818,34 +818,34 @@ const hardDeleteBusiness = async (id: string) => {
       </div>
 
       <div className="px-4 flex gap-2 mb-3 flex-wrap">
-        {([
-          ([
-  ['pending', '신규 대기'],
-  ['vip', 'VIP'],
-  ['all', '전체'],
-  ['trash', '🗑 휴지통'],
-  ['categories', '🗂 카테고리'],
-] as const)
-        ] as const).map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`px-4 py-2 rounded-lg text-[12px] font-bold ${
-              tab === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'
-            }`}
-          >
-            {l}
-          </button>
-        ))}
+  {([
+    ['pending', '신규 대기'],
+    ['vip', 'VIP'],
+    ['all', '전체'],
+    ['trash', '🗑 휴지통'],
+    ['categories', '🗂 카테고리'],
+  ] as const).map(([k, l]) => (
+    <button
+      key={k}
+      onClick={() => setTab(k)}
+      className={`px-4 py-2 rounded-lg text-[12px] font-bold ${
+        tab === k
+          ? 'bg-indigo-600 text-white'
+          : 'bg-white border border-slate-200 text-slate-600'
+      }`}
+    >
+      {l}
+    </button>
+  ))}
 
-        <button
-          onClick={load}
-          className="ml-auto px-3 py-2 rounded-lg text-[12px] font-bold bg-white border border-slate-200 text-slate-500"
-        >
-          🔄
-        </button>
-      </div>
-
+  <button
+    onClick={load}
+    className="ml-auto px-3 py-2 rounded-lg text-[12px] font-bold bg-white border border-slate-200 text-slate-500"
+  >
+    🔄
+  </button>
+</div>
+      
       {tab === 'categories' ? (
         <div className="px-4 space-y-3">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
