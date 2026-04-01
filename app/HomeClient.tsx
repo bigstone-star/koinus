@@ -750,18 +750,18 @@ q = q
 
       <main className="px-3 py-2.5 pb-44 space-y-2">
         {!user && (
-          <Link
-            href="/auth/login"
-            className="block bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl px-4 py-3 mb-2"
-          >
-            <div className="text-white font-bold text-[14px]">
-              🏢 내 업소를 무료로 등록하세요!
-            </div>
-            <div className="text-white/70 text-[12px] mt-0.5">
-              Google 로그인 → 업소 등록 → VIP 업그레이드
-            </div>
-          </a>
-        )}
+  <Link
+    href="/auth/login"
+    className="block bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl px-4 py-3 mb-2"
+  >
+    <div className="text-white font-bold text-[14px]">
+      🏢 내 업소를 무료로 등록하세요!
+    </div>
+    <div className="text-white/70 text-[12px] mt-0.5">
+      Google 로그인 → 업소 등록 → VIP 업그레이드
+    </div>
+  </Link>
+)}
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
