@@ -10,6 +10,15 @@ const sb = createClient(
 
 const ICON_OPTIONS = ['🍽️', '🛒', '🏥', '🦷', '⚖️', '🚗', '💄', '📚', '💳', '⛪', '🏠', '🧺', '🌿', '✈️', '📰', '👓', '📋']
 
+const REGION_LABELS: Record<string, string> = {
+  houston: 'Houston',
+  dallas: 'Dallas',
+  fort_worth: 'Fort Worth',
+  central_texas: 'Central TX',
+}
+
+const STORAGE_KEY = 'admin_businesses_state'
+
 type Category = {
   id: string
   name: string
@@ -29,6 +38,7 @@ export default function AdminBusinessesPage() {
   const [loading, setLoading] = useState(true)
   const [ok, setOk] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [restored, setRestored] = useState(false)
 
   const [cats, setCats] = useState<Category[]>([])
   const [newCatName, setNewCatName] = useState('')
@@ -70,8 +80,33 @@ export default function AdminBusinessesPage() {
           return
         }
 
+        let savedTab: 'pending' | 'vip' | 'all' | 'categories' = 'all'
+        let savedSearch = ''
+
+        try {
+          const saved = sessionStorage.getItem(STORAGE_KEY)
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (parsed.tab === 'pending' || parsed.tab === 'vip' || parsed.tab === 'all' || parsed.tab === 'categories') {
+              savedTab = parsed.tab
+            }
+            if (typeof parsed.search === 'string') {
+              savedSearch = parsed.search
+            }
+          }
+        } catch {}
+
+        setTab(savedTab)
+        setSearch(savedSearch)
         setOk(true)
-        await Promise.all([load(), loadCats()])
+
+        await Promise.all([
+          loadStats(),
+          loadCats(),
+          loadList(savedSearch, savedTab),
+        ])
+
+        setRestored(true)
       } catch (e) {
         setErrorMsg('관리자 정보를 불러오는 중 오류가 발생했습니다.')
       } finally {
@@ -82,8 +117,23 @@ export default function AdminBusinessesPage() {
     init()
   }, [])
 
-  const loadList = useCallback(async (searchTerm?: string) => {
-    if (tab === 'categories') {
+  useEffect(() => {
+    if (!ok) return
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          tab,
+          search,
+        })
+      )
+    } catch {}
+  }, [tab, search, ok])
+
+  const loadList = useCallback(async (searchTerm?: string, tabOverride?: 'pending' | 'vip' | 'all' | 'categories') => {
+    const currentTab = tabOverride ?? tab
+
+    if (currentTab === 'categories') {
       await loadCats()
       return
     }
@@ -93,8 +143,8 @@ export default function AdminBusinessesPage() {
 
     let q = sb.from('businesses').select('*').eq('is_active', true)
 
-    if (tab === 'pending') q = q.eq('data_source', 'user_registered')
-    if (tab === 'vip') q = q.eq('is_vip', true)
+    if (currentTab === 'pending') q = q.eq('data_source', 'user_registered')
+    if (currentTab === 'vip') q = q.eq('is_vip', true)
 
     const term = searchTerm !== undefined ? searchTerm : search
 
@@ -107,6 +157,8 @@ export default function AdminBusinessesPage() {
           `category_sub.ilike.%${term}%`,
           `address.ilike.%${term}%`,
           `phone.ilike.%${term}%`,
+          `metro_area.ilike.%${term}%`,
+          `city.ilike.%${term}%`,
         ].join(',')
       )
     }
@@ -125,10 +177,8 @@ export default function AdminBusinessesPage() {
     setLoading(false)
   }, [tab, search])
 
-  async function load() {
+  async function loadStats() {
     try {
-      setLoading(true)
-
       const [t, v, pd] = await Promise.all([
         sb.from('businesses').select('id', { count: 'exact', head: true }).eq('is_active', true),
         sb.from('businesses').select('id', { count: 'exact', head: true }).eq('is_vip', true),
@@ -140,7 +190,15 @@ export default function AdminBusinessesPage() {
         vip: v.count || 0,
         pending: pd.count || 0,
       })
+    } catch (e) {
+      setErrorMsg('통계를 불러오는 중 오류가 발생했습니다.')
+    }
+  }
 
+  async function load() {
+    try {
+      setLoading(true)
+      await loadStats()
       await loadList()
     } catch (e) {
       setErrorMsg('통계를 불러오는 중 오류가 발생했습니다.')
@@ -172,8 +230,8 @@ export default function AdminBusinessesPage() {
   }
 
   useEffect(() => {
-    if (ok) loadList()
-  }, [tab, ok, loadList])
+    if (ok && restored) loadList()
+  }, [tab, ok, restored, loadList])
 
   const handleSearch = () => loadList(search)
 
@@ -288,7 +346,7 @@ export default function AdminBusinessesPage() {
     alert(`✅ ${selected.size}개 업소가 승인되었습니다.`)
     setSelected(new Set())
     loadList()
-    load()
+    loadStats()
   }
 
   const bulkUnapprove = async () => {
@@ -312,7 +370,7 @@ export default function AdminBusinessesPage() {
     alert(`✅ ${selected.size}개 업소의 승인이 취소되었습니다.`)
     setSelected(new Set())
     loadList()
-    load()
+    loadStats()
   }
 
   const bulkSetVip = async () => {
@@ -336,7 +394,7 @@ export default function AdminBusinessesPage() {
     alert(`✅ ${selected.size}개 업소가 VIP로 지정되었습니다.`)
     setSelected(new Set())
     loadList()
-    load()
+    loadStats()
   }
 
   const bulkUnsetVip = async () => {
@@ -360,7 +418,7 @@ export default function AdminBusinessesPage() {
     alert(`✅ ${selected.size}개 업소의 VIP가 해제되었습니다.`)
     setSelected(new Set())
     loadList()
-    load()
+    loadStats()
   }
 
   const bulkDeactivate = async () => {
@@ -384,7 +442,7 @@ export default function AdminBusinessesPage() {
     alert(`✅ ${selected.size}개 업소가 비활성화되었습니다.`)
     setSelected(new Set())
     loadList()
-    load()
+    loadStats()
   }
 
   const bulkReactivate = async () => {
@@ -408,13 +466,13 @@ export default function AdminBusinessesPage() {
     alert(`✅ ${selected.size}개 업소가 다시 활성화되었습니다.`)
     setSelected(new Set())
     loadList()
-    load()
+    loadStats()
   }
 
   const approve = async (id: string) => {
     await sb.from('businesses').update({ approved: true }).eq('id', id)
     loadList()
-    load()
+    loadStats()
   }
 
   const toggleVip = async (b: any) => {
@@ -424,14 +482,14 @@ export default function AdminBusinessesPage() {
       .eq('id', b.id)
 
     loadList()
-    load()
+    loadStats()
   }
 
   const deactivate = async (id: string) => {
     if (!confirm('비활성화할까요?')) return
     await sb.from('businesses').update({ is_active: false }).eq('id', id)
     loadList()
-    load()
+    loadStats()
   }
 
   const addCat = async () => {
@@ -744,7 +802,7 @@ export default function AdminBusinessesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e: any) => e.key === 'Enter' && handleSearch()}
-                placeholder="업소명, 카테고리, 서브카테고리, 주소, 전화 검색..."
+                placeholder="업소명, 카테고리, 서브카테고리, 주소, 전화, 지역 검색..."
                 className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-[13px]"
               />
               <button
@@ -903,6 +961,7 @@ export default function AdminBusinessesPage() {
           ) : (
             list.map((b) => {
               const isChecked = selected.has(b.id)
+              const regionLabel = REGION_LABELS[b.metro_area] || b.metro_area || '지역없음'
 
               return (
                 <div
@@ -944,6 +1003,16 @@ export default function AdminBusinessesPage() {
                         {b.category_sub && (
                           <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
                             {b.category_sub}
+                          </span>
+                        )}
+
+                        <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium">
+                          {regionLabel}
+                        </span>
+
+                        {b.city && (
+                          <span className="bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded font-medium">
+                            {b.city}
                           </span>
                         )}
 
