@@ -266,8 +266,12 @@ export default function Home() {
       )
     }
 
-    q = q.order('is_vip', { ascending: false })
-
+q = q
+  .order('is_vip', { ascending: false })
+  .order('korean_score', { ascending: false, nullsLast: true })
+  .order('rating', { ascending: false, nullsLast: true })
+  .order('review_count', { ascending: false, nullsLast: true })
+    
     if (sort === 'name_en') q = q.order('name_en', { ascending: true })
     else q = q.order(sort as any, { ascending: false, nullsFirst: false })
 
