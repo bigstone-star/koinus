@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
 const sb = createClient(
@@ -8,12 +9,27 @@ const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+type BusinessRow = {
+  id: string
+  name_kr?: string | null
+  name_en?: string | null
+  category_main?: string | null
+  address?: string | null
+  phone?: string | null
+  owner_id?: string | null
+  is_active?: boolean | null
+}
+
+type ClaimStatusMap = Record<string, string>
+
 export default function ClaimBusinessPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [searching, setSearching] = useState(false)
+
   const [search, setSearch] = useState('')
-  const [results, setResults] = useState<any[]>([])
-  const [selected, setSelected] = useState<any>(null)
+  const [results, setResults] = useState<BusinessRow[]>([])
+  const [selected, setSelected] = useState<BusinessRow | null>(null)
 
   const [message, setMessage] = useState('')
   const [proofText, setProofText] = useState('')
@@ -23,6 +39,8 @@ export default function ClaimBusinessPage() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [msgType, setMsgType] = useState<'success' | 'error' | ''>('')
+
+  const [claimStatusMap, setClaimStatusMap] = useState<ClaimStatusMap>({})
 
   useEffect(() => {
     const init = async () => {
@@ -35,40 +53,76 @@ export default function ClaimBusinessPage() {
 
       setUser(data.user)
       setContactEmail(data.user.email || '')
+
+      const { data: existingClaims } = await sb
+        .from('business_claim_requests')
+        .select('business_id, status')
+        .eq('user_id', data.user.id)
+        .in('status', ['pending', 'approved'])
+
+      if (existingClaims && existingClaims.length > 0) {
+        const nextMap: ClaimStatusMap = {}
+        existingClaims.forEach((item: any) => {
+          if (item.business_id && item.status) {
+            nextMap[item.business_id] = item.status
+          }
+        })
+        setClaimStatusMap(nextMap)
+      }
+
       setLoading(false)
     }
 
     init()
   }, [])
 
+  const resetMessage = () => {
+    setMsg('')
+    setMsgType('')
+  }
+
   const searchBusinesses = async () => {
     const term = search.trim()
 
     if (!term) {
       setResults([])
+      setSelected(null)
       return
     }
 
-    setMsg('')
-    setMsgType('')
+    resetMessage()
+    setSearching(true)
 
     const { data, error } = await sb
       .from('businesses')
       .select('id, name_kr, name_en, category_main, address, phone, owner_id, is_active')
       .eq('is_active', true)
       .or(
-        `name_kr.ilike.%${term}%,name_en.ilike.%${term}%,phone.ilike.%${term}%,address.ilike.%${term}%`
+        [
+          `name_kr.ilike.%${term}%`,
+          `name_en.ilike.%${term}%`,
+          `phone.ilike.%${term}%`,
+          `address.ilike.%${term}%`,
+        ].join(',')
       )
       .order('is_vip', { ascending: false })
       .limit(20)
 
+    setSearching(false)
+
     if (error) {
       setMsg('검색 중 오류가 발생했습니다.')
       setMsgType('error')
+      setResults([])
       return
     }
 
-    setResults((data || []).filter((b: any) => !b.owner_id))
+    const filtered = (data || []).filter((b: any) => !b.owner_id)
+    setResults(filtered)
+
+    if (selected && !filtered.find((b: any) => b.id === selected.id)) {
+      setSelected(null)
+    }
   }
 
   const submitClaim = async () => {
@@ -80,17 +134,51 @@ export default function ClaimBusinessPage() {
       return
     }
 
+    if (claimStatusMap[selected.id] === 'pending') {
+      setMsg('이미 이 업소에 대한 소유권 요청이 접수되어 있습니다.')
+      setMsgType('error')
+      return
+    }
+
+    if (claimStatusMap[selected.id] === 'approved') {
+      setMsg('이미 승인된 요청 이력이 있습니다. 관리자에게 확인해 주세요.')
+      setMsgType('error')
+      return
+    }
+
     setSaving(true)
-    setMsg('')
-    setMsgType('')
+    resetMessage()
+
+    const { data: existing, error: existingError } = await sb
+      .from('business_claim_requests')
+      .select('id, status')
+      .eq('business_id', selected.id)
+      .eq('user_id', user.id)
+      .eq('status', 'pending')
+      .limit(1)
+
+    if (existingError) {
+      setSaving(false)
+      setMsg('기존 요청 확인 중 오류가 발생했습니다.')
+      setMsgType('error')
+      return
+    }
+
+    if (existing && existing.length > 0) {
+      setSaving(false)
+      setMsg('이미 같은 업소에 대한 요청이 접수되어 있습니다.')
+      setMsgType('error')
+      return
+    }
 
     const { error } = await sb.from('business_claim_requests').insert({
       business_id: selected.id,
       user_id: user.id,
-      message: message || null,
-      proof_text: proofText || null,
-      contact_phone: contactPhone || null,
-      contact_email: contactEmail || null,
+      message: message.trim() || null,
+      proof_text: proofText.trim() || null,
+      contact_phone: contactPhone.trim() || null,
+      contact_email: contactEmail.trim() || null,
+      status: 'pending',
     })
 
     setSaving(false)
@@ -100,6 +188,11 @@ export default function ClaimBusinessPage() {
       setMsgType('error')
       return
     }
+
+    setClaimStatusMap((prev) => ({
+      ...prev,
+      [selected.id]: 'pending',
+    }))
 
     setMsg('소유권 요청이 접수되었습니다. 관리자 확인 후 연결됩니다.')
     setMsgType('success')
@@ -130,12 +223,13 @@ export default function ClaimBusinessPage() {
             기존 업소를 찾아 내 계정으로 연결 요청
           </p>
         </div>
-        <a
+
+        <Link
           href="/dashboard"
           className="text-white/40 text-[13px] border border-white/20 px-3 py-1.5 rounded-lg"
         >
           대시보드
-        </a>
+        </Link>
       </div>
 
       {msg && (
@@ -163,47 +257,72 @@ export default function ClaimBusinessPage() {
           />
           <button
             onClick={searchBusinesses}
-            className="px-4 bg-indigo-600 text-white rounded-lg text-[13px] font-bold"
+            className="px-4 bg-indigo-600 text-white rounded-lg text-[13px] font-bold min-w-[72px]"
           >
-            검색
+            {searching ? '검색중' : '검색'}
           </button>
         </div>
 
         {results.length > 0 && (
           <div className="space-y-2 pt-2">
-            {results.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setSelected(b)}
-                className={`w-full text-left rounded-xl border p-3 ${
-                  selected?.id === b.id
-                    ? 'border-indigo-500 bg-indigo-50'
-                    : 'border-slate-200 bg-white'
-                }`}
-              >
-                <div className="font-bold text-[14px] text-slate-800">
-                  {b.name_kr || b.name_en}
-                </div>
+            {results.map((b) => {
+              const claimStatus = claimStatusMap[b.id]
 
-                {b.category_main && (
-                  <div className="text-[12px] text-slate-400 mt-0.5">
-                    {b.category_main}
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => setSelected(b)}
+                  disabled={claimStatus === 'pending' || claimStatus === 'approved'}
+                  className={`w-full text-left rounded-xl border p-3 transition ${
+                    selected?.id === b.id
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-slate-200 bg-white'
+                  } ${
+                    claimStatus === 'pending' || claimStatus === 'approved'
+                      ? 'opacity-60 cursor-not-allowed'
+                      : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-bold text-[14px] text-slate-800">
+                        {b.name_kr || b.name_en}
+                      </div>
+
+                      {b.category_main && (
+                        <div className="text-[12px] text-slate-400 mt-0.5">
+                          {b.category_main}
+                        </div>
+                      )}
+
+                      {b.phone && (
+                        <div className="text-[12px] text-slate-500 mt-1">📞 {b.phone}</div>
+                      )}
+
+                      {b.address && (
+                        <div className="text-[12px] text-slate-500 mt-0.5">📍 {b.address}</div>
+                      )}
+                    </div>
+
+                    {claimStatus === 'pending' && (
+                      <span className="text-[11px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full whitespace-nowrap">
+                        요청중
+                      </span>
+                    )}
+
+                    {claimStatus === 'approved' && (
+                      <span className="text-[11px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full whitespace-nowrap">
+                        승인됨
+                      </span>
+                    )}
                   </div>
-                )}
-
-                {b.phone && (
-                  <div className="text-[12px] text-slate-500 mt-1">📞 {b.phone}</div>
-                )}
-
-                {b.address && (
-                  <div className="text-[12px] text-slate-500 mt-0.5">📍 {b.address}</div>
-                )}
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         )}
 
-        {search.trim() && results.length === 0 && (
+        {search.trim() && !searching && results.length === 0 && (
           <div className="text-[13px] text-slate-400 pt-2">
             검색 결과가 없거나 이미 소유자가 연결된 업소입니다.
           </div>
