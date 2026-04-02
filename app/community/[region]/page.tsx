@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 const sb = createClient(
@@ -51,6 +52,7 @@ export default function CommunityRegionPage({
 }: {
   params: { region: string }
 }) {
+  const router = useRouter()
   const region = params.region
 
   const [posts, setPosts] = useState<CommunityPost[]>([])
@@ -129,7 +131,9 @@ export default function CommunityRegionPage({
     }
   }
 
-  const toggleLike = async (postId: string) => {
+  const toggleLike = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation()
+
     if (!user) {
       alert('로그인이 필요합니다.')
       return
@@ -175,9 +179,10 @@ export default function CommunityRegionPage({
     await loadPosts(user)
   }
 
-  const hidePost = async (postId: string) => {
-    if (!isAdmin) return
+  const hidePost = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation()
 
+    if (!isAdmin) return
     if (!confirm('이 글을 숨기시겠습니까?')) return
 
     const { error } = await sb
@@ -192,6 +197,10 @@ export default function CommunityRegionPage({
 
     await loadPosts(user)
     alert('글이 숨김 처리되었습니다.')
+  }
+
+  const goDetail = (postId: string) => {
+    router.push(`/community/${region}/${postId}`)
   }
 
   const filteredPosts = useMemo(() => {
@@ -252,7 +261,11 @@ export default function CommunityRegionPage({
         </div>
       ) : (
         filteredPosts.map((p) => (
-          <div key={p.id} className="bg-white p-4 rounded-xl border shadow-sm">
+          <div
+            key={p.id}
+            onClick={() => goDetail(p.id)}
+            className="bg-white p-4 rounded-xl border shadow-sm cursor-pointer hover:bg-slate-50 transition"
+          >
             <div className="flex items-center gap-2 text-xs mb-2 flex-wrap">
               {p.is_pinned && (
                 <span className="bg-red-50 text-red-600 px-2 py-1 rounded-full font-bold">
@@ -281,7 +294,7 @@ export default function CommunityRegionPage({
 
             <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
               <button
-                onClick={() => toggleLike(p.id)}
+                onClick={(e) => toggleLike(e, p.id)}
                 className={`font-bold ${
                   likedMap[p.id] ? 'text-red-500' : 'text-gray-400'
                 }`}
@@ -291,6 +304,7 @@ export default function CommunityRegionPage({
 
               <Link
                 href={`/community/${region}/${p.id}`}
+                onClick={(e) => e.stopPropagation()}
                 className="text-slate-500 font-bold"
               >
                 댓글 {p.comment_count || 0}
@@ -298,7 +312,7 @@ export default function CommunityRegionPage({
 
               {isAdmin && (
                 <button
-                  onClick={() => hidePost(p.id)}
+                  onClick={(e) => hidePost(e, p.id)}
                   className="text-xs text-red-500 font-bold"
                 >
                   숨김
