@@ -37,9 +37,12 @@ export default function CommunityDetailPage({
   const [business, setBusiness] = useState<any>(null)
   const [comments, setComments] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState('')
 
   const makeNickname = (userId: string) => `이웃-${userId.slice(0, 6)}`
 
@@ -47,6 +50,25 @@ export default function CommunityDetailPage({
     const load = async () => {
       const { data: userData } = await sb.auth.getUser()
       setUser(userData.user)
+
+      if (userData.user) {
+        const { data: profileData } = await sb
+          .from('user_profiles')
+          .select('id, name, email, role')
+          .eq('id', userData.user.id)
+          .maybeSingle()
+
+        setProfile(profileData || null)
+
+        if (
+          profileData?.role === 'admin' ||
+          profileData?.role === 'super_admin'
+        ) {
+          setIsAdmin(true)
+        } else {
+          setIsAdmin(false)
+        }
+      }
 
       const { data: postData, error: postError } = await sb
         .from('community_posts')
@@ -100,7 +122,7 @@ export default function CommunityDetailPage({
 
     setSaving(true)
 
-    const nickname = makeNickname(user.id)
+    const nickname = profile?.name || makeNickname(user.id)
 
     const { data, error } = await sb
       .from('community_comments')
@@ -127,6 +149,37 @@ export default function CommunityDetailPage({
       prev ? { ...prev, comment_count: (prev.comment_count || 0) + 1 } : prev
     )
     setSaving(false)
+  }
+
+  const deleteComment = async (commentId: string) => {
+    if (!isAdmin) {
+      alert('관리자만 댓글을 삭제할 수 있습니다.')
+      return
+    }
+
+    if (!confirm('이 댓글을 삭제하시겠습니까?')) return
+
+    setDeletingId(commentId)
+
+    const { error } = await sb
+      .from('community_comments')
+      .delete()
+      .eq('id', commentId)
+
+    if (error) {
+      setDeletingId('')
+      alert('댓글 삭제 실패: ' + error.message)
+      return
+    }
+
+    await sb.rpc('decrement_comment', { pid: id })
+
+    setComments((prev) => prev.filter((c) => c.id !== commentId))
+    setPost((prev: any) =>
+      prev ? { ...prev, comment_count: Math.max((prev.comment_count || 0) - 1, 0) } : prev
+    )
+
+    setDeletingId('')
   }
 
   const formatDate = (date: string) => new Date(date).toLocaleDateString()
@@ -193,10 +246,24 @@ export default function CommunityDetailPage({
         ) : (
           comments.map((c) => (
             <div key={c.id} className="border-b py-3 last:border-none">
-              <div className="text-xs text-gray-400 mb-1">
-                {c.nickname} · {formatDate(c.created_at)}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-gray-400 mb-1">
+                    {c.nickname} · {formatDate(c.created_at)}
+                  </div>
+                  <div className="text-sm text-slate-700">{c.content}</div>
+                </div>
+
+                {isAdmin && (
+                  <button
+                    onClick={() => deleteComment(c.id)}
+                    disabled={deletingId === c.id}
+                    className="text-xs text-red-500 font-bold whitespace-nowrap"
+                  >
+                    {deletingId === c.id ? '삭제중' : '삭제'}
+                  </button>
+                )}
               </div>
-              <div className="text-sm text-slate-700">{c.content}</div>
             </div>
           ))
         )}
