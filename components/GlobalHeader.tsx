@@ -15,9 +15,17 @@ export default function GlobalHeader() {
 
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
+  const [currentRegion, setCurrentRegion] = useState('houston')
 
   useEffect(() => {
     init()
+
+    try {
+      const savedRegion = localStorage.getItem('gj_region')
+      if (savedRegion) {
+        setCurrentRegion(savedRegion)
+      }
+    } catch {}
   }, [])
 
   const init = async () => {
@@ -56,7 +64,7 @@ export default function GlobalHeader() {
         </Link>
 
         <Link
-          href="/community"
+          href={`/community/${currentRegion}`}
           className={`text-[12px] px-3 py-1.5 rounded-lg transition ${navClass(!!isCommunity)}`}
         >
           커뮤니티
