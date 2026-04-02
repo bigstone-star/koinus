@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import GlobalHeader from '@/components/GlobalHeader'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://kyocharo-houston.vercel.app'),
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <GlobalHeader />
+        {children}
+      </body>
     </html>
   )
 }
