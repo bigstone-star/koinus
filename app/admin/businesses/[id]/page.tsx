@@ -188,24 +188,28 @@ export default function AdminBusinessEditPage({ params }: { params: { id: string
     const nextMetroArea = inferMetroArea(nextCity, biz.address || '') || biz.metro_area || null
 
     const { error } = await sb
-      .from('businesses')
-      .update({
-        name_kr: biz.name_kr || '',
-        name_en: biz.name_en || '',
-        category_main: biz.category_main || '',
-        category_sub: biz.category_sub || '',
-        address: biz.address || '',
-        city: nextCity,
-        metro_area: nextMetroArea,
-        phone: biz.phone || '',
-        website: biz.website || '',
-        description_kr: biz.description_kr || '',
-        sns_instagram: biz.sns_instagram || '',
-        sns_kakao: biz.sns_kakao || '',
-        approved: !!biz.approved,
-        is_vip: !!biz.is_vip,
-      })
-      .eq('id', biz.id)
+  .from('businesses')
+  .update({
+    name_kr: biz.name_kr || '',
+    name_en: biz.name_en || '',
+    category_main: biz.category_main || '',
+    category_sub: biz.category_sub || '',
+    address: biz.address || '',
+    city: nextCity,
+    metro_area: nextMetroArea,
+    phone: biz.phone || '',
+    website: biz.website || '',
+    description_kr: biz.description_kr || '',
+    sns_instagram: biz.sns_instagram || '',
+    sns_kakao: biz.sns_kakao || '',
+
+    approved: !!biz.approved,
+    is_vip: !!biz.is_vip,
+    is_active: biz.is_active !== false,
+    vip_tier: biz.is_vip ? (biz.vip_tier || 'pro') : null,
+    owner_id: biz.owner_id || null,
+  })
+  .eq('id', biz.id)
 
     setSaving(false)
 
