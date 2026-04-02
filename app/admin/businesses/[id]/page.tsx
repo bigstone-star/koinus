@@ -389,25 +389,34 @@ export default function AdminBusinessEditPage({ params }: { params: { id: string
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-bold text-slate-700">
-              <input
-                type="checkbox"
-                checked={!!biz?.approved}
-                onChange={(e) => upd('approved', e.target.checked)}
-              />
-              승인 상태
-            </label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+  <label className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-bold text-slate-700">
+    <input
+      type="checkbox"
+      checked={!!biz?.approved}
+      onChange={(e) => upd('approved', e.target.checked)}
+    />
+    승인 상태
+  </label>
 
-            <label className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-bold text-slate-700">
-              <input
-                type="checkbox"
-                checked={!!biz?.is_vip}
-                onChange={(e) => upd('is_vip', e.target.checked)}
-              />
-              VIP 상태
-            </label>
-          </div>
+  <label className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-bold text-slate-700">
+    <input
+      type="checkbox"
+      checked={!!biz?.is_vip}
+      onChange={(e) => upd('is_vip', e.target.checked)}
+    />
+    VIP 상태
+  </label>
+
+  <label className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-bold text-slate-700">
+    <input
+      type="checkbox"
+      checked={biz?.is_active !== false}
+      onChange={(e) => upd('is_active', e.target.checked)}
+    />
+    활성 상태
+  </label>
+</div>
         </div>
 
         <button
