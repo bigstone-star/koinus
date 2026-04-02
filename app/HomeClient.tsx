@@ -116,22 +116,6 @@ const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
   })
 
   const [claimLoading, setClaimLoading] = useState(false)
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
-  const [editMode, setEditMode] = useState(false)
-  const [adminSaving, setAdminSaving] = useState(false)
-  const [adminEditForm, setAdminEditForm] = useState<any>({
-    name_kr: '',
-    name_en: '',
-    category_main: '',
-    category_sub: '',
-    phone: '',
-    address: '',
-    website: '',
-    description_kr: '',
-    approved: false,
-    is_vip: false,
-    is_active: true,
-  })
 
   const SORTS = ['rating', 'review_count', 'name_en']
   const SORT_LABELS: Record<string, string> = {
@@ -157,41 +141,11 @@ const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
       setFavs(JSON.parse(localStorage.getItem('gj_favs') || '[]'))
     } catch {}
 
-    sb.auth.getUser().then(async ({ data }) => {
-      setUser(data.user)
-
-      if (!data.user) {
-        setIsSuperAdmin(false)
-        return
-      }
-
-      const { data: profile } = await sb
-        .from('user_profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .maybeSingle()
-
-      setIsSuperAdmin(profile?.role === 'super_admin')
-    })
+    sb.auth.getUser().then(({ data }) => setUser(data.user))
 
     const {
       data: { subscription },
-    } = sb.auth.onAuthStateChange(async (_, s) => {
-      setUser(s?.user ?? null)
-
-      if (!s?.user) {
-        setIsSuperAdmin(false)
-        return
-      }
-
-      const { data: profile } = await sb
-        .from('user_profiles')
-        .select('role')
-        .eq('id', s.user.id)
-        .maybeSingle()
-
-      setIsSuperAdmin(profile?.role === 'super_admin')
-    })
+    } = sb.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null))
 
     sb.from('categories')
       .select('*')
@@ -596,94 +550,10 @@ if (sort === 'name_en') {
     }
   }
 
-  const openAdminEditMode = () => {
-    if (!sel) return
-
-    setAdminEditForm({
-      name_kr: sel.name_kr || '',
-      name_en: sel.name_en || '',
-      category_main: sel.category_main || '',
-      category_sub: sel.category_sub || '',
-      phone: sel.phone || '',
-      address: sel.address || '',
-      website: sel.website || '',
-      description_kr: sel.description_kr || '',
-      approved: !!sel.approved,
-      is_vip: !!sel.is_vip,
-      is_active: sel.is_active !== false,
-    })
-
-    setEditMode(true)
-  }
-
-  const updateAdminEditField = (key: string, value: any) => {
-    setAdminEditForm((prev: any) => ({
-      ...prev,
-      [key]: value,
-    }))
-  }
-
-  const saveAdminInlineEdit = async () => {
-    if (!sel?.id) return
-
-    setAdminSaving(true)
-
-    const { data, error } = await sb
-      .from('businesses')
-      .update({
-        name_kr: adminEditForm.name_kr || '',
-        name_en: adminEditForm.name_en || '',
-        category_main: adminEditForm.category_main || '',
-        category_sub: adminEditForm.category_sub || '',
-        phone: adminEditForm.phone || '',
-        address: adminEditForm.address || '',
-        website: adminEditForm.website || '',
-        description_kr: adminEditForm.description_kr || '',
-        approved: !!adminEditForm.approved,
-        is_vip: !!adminEditForm.is_vip,
-        is_active: adminEditForm.is_active !== false,
-        vip_tier: adminEditForm.is_vip ? 'pro' : null,
-      })
-      .eq('id', sel.id)
-      .select()
-      .single()
-
-    setAdminSaving(false)
-
-    if (error) {
-      alert('저장 실패: ' + error.message)
-      return
-    }
-
-    if (data) {
-      setSel(data)
-      setBiz((prev: any[]) =>
-        prev.map((item) => (item.id === data.id ? { ...item, ...data } : item))
-      )
-    }
-
-    setEditMode(false)
-    alert('✅ 저장 완료')
-  }
-
   const closeModal = () => {
     setSel(null)
     setReviews([])
     setMyReview(null)
-    setEditMode(false)
-    setAdminEditForm({
-      name_kr: '',
-      name_en: '',
-      category_main: '',
-      category_sub: '',
-      phone: '',
-      address: '',
-      website: '',
-      description_kr: '',
-      approved: false,
-      is_vip: false,
-      is_active: true,
-    })
     setReviewForm({
       rating: 5,
       review_text: '',
@@ -1066,37 +936,7 @@ const currentCategoryTopBanner =
           onClick={(e: any) => e.target === e.currentTarget && closeModal()}
         >
           <div className="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto pb-10">
-            <div className="flex justify-between items-center px-5 pt-4">
-              <div>
-                {isSuperAdmin && !editMode && (
-                  <button
-                    onClick={openAdminEditMode}
-                    className="bg-red-500 text-white px-3 py-2 rounded-lg text-[12px] font-bold"
-                  >
-                    ✏️ 인라인 수정
-                  </button>
-                )}
-
-                {isSuperAdmin && editMode && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={saveAdminInlineEdit}
-                      disabled={adminSaving}
-                      className="bg-green-600 text-white px-3 py-2 rounded-lg text-[12px] font-bold disabled:opacity-50"
-                    >
-                      {adminSaving ? '저장 중...' : '💾 저장'}
-                    </button>
-
-                    <button
-                      onClick={() => setEditMode(false)}
-                      className="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-[12px] font-bold"
-                    >
-                      취소
-                    </button>
-                  </div>
-                )}
-              </div>
-
+            <div className="flex justify-end px-5 pt-4">
               <button
                 onClick={closeModal}
                 className="text-slate-400 text-2xl"
@@ -1106,136 +946,43 @@ const currentCategoryTopBanner =
             </div>
 
             <div className="px-5 pb-4 border-b border-slate-100">
-              {!editMode ? (
-                <>
-                  <div className="text-[12px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full inline-block mb-2">
-                    {sel.category_main}
-                    {sel.category_sub ? ' · ' + sel.category_sub : ''}
-                  </div>
+              <div className="text-[12px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full inline-block mb-2">
+                {sel.category_main}
+                {sel.category_sub ? ' · ' + sel.category_sub : ''}
+              </div>
 
-                  <h2 className="text-[22px] font-extrabold text-slate-900">
-                    {sel.name_kr || sel.name_en}
-                  </h2>
+              <h2 className="text-[22px] font-extrabold text-slate-900">
+                {sel.name_kr || sel.name_en}
+              </h2>
 
-                  {sel.name_kr && sel.name_en && (
-                    <p className="text-[13px] text-slate-400">{sel.name_en}</p>
-                  )}
+              {sel.name_kr && sel.name_en && (
+                <p className="text-[13px] text-slate-400">{sel.name_en}</p>
+              )}
 
-                  {sel.rating > 0 && (
-                    <div className="mt-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-400">
-                          {'★'.repeat(Math.max(1, Math.round(Number(sel.rating))))}
-                        </span>
-                        <span className="font-bold">
-                          {Number(sel.rating).toFixed(1)}
-                        </span>
-                        <span className="text-[13px] text-slate-400">
-                          외부 평점 · {(sel.review_count || 0).toLocaleString()}개
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {sel.description_kr && (
-                    <p className="text-[13px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">
-                      {sel.description_kr}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div className="space-y-3">
-                  <input
-                    value={adminEditForm.name_kr}
-                    onChange={(e) => updateAdminEditField('name_kr', e.target.value)}
-                    placeholder="업소명(한국어)"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <input
-                    value={adminEditForm.name_en}
-                    onChange={(e) => updateAdminEditField('name_en', e.target.value)}
-                    placeholder="업소명(영어)"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <input
-                    value={adminEditForm.category_main}
-                    onChange={(e) => updateAdminEditField('category_main', e.target.value)}
-                    placeholder="메인 카테고리"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <input
-                    value={adminEditForm.category_sub}
-                    onChange={(e) => updateAdminEditField('category_sub', e.target.value)}
-                    placeholder="서브카테고리"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <input
-                    value={adminEditForm.phone}
-                    onChange={(e) => updateAdminEditField('phone', e.target.value)}
-                    placeholder="전화번호"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <input
-                    value={adminEditForm.address}
-                    onChange={(e) => updateAdminEditField('address', e.target.value)}
-                    placeholder="주소"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <input
-                    value={adminEditForm.website}
-                    onChange={(e) => updateAdminEditField('website', e.target.value)}
-                    placeholder="웹사이트"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px]"
-                  />
-
-                  <textarea
-                    value={adminEditForm.description_kr}
-                    onChange={(e) => updateAdminEditField('description_kr', e.target.value)}
-                    rows={4}
-                    placeholder="소개글"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] resize-none"
-                  />
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label className="flex items-center gap-2 text-[13px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={!!adminEditForm.approved}
-                        onChange={(e) => updateAdminEditField('approved', e.target.checked)}
-                      />
-                      승인
-                    </label>
-
-                    <label className="flex items-center gap-2 text-[13px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={!!adminEditForm.is_vip}
-                        onChange={(e) => updateAdminEditField('is_vip', e.target.checked)}
-                      />
-                      VIP
-                    </label>
-
-                    <label className="flex items-center gap-2 text-[13px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={adminEditForm.is_active !== false}
-                        onChange={(e) => updateAdminEditField('is_active', e.target.checked)}
-                      />
-                      활성
-                    </label>
+              {sel.rating > 0 && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400">
+                      {'★'.repeat(Math.max(1, Math.round(Number(sel.rating))))}
+                    </span>
+                    <span className="font-bold">
+                      {Number(sel.rating).toFixed(1)}
+                    </span>
+                    <span className="text-[13px] text-slate-400">
+                      외부 평점 · {(sel.review_count || 0).toLocaleString()}개
+                    </span>
                   </div>
                 </div>
               )}
+
+              {sel.description_kr && (
+                <p className="text-[13px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">
+                  {sel.description_kr}
+                </p>
+              )}
             </div>
 
-            {!editMode && (
-              <div className="px-5 py-2 space-y-3">
+            <div className="px-5 py-2 space-y-3">
               {sel.address && (
                 <div className="flex gap-3 py-2">
                   <span>📍</span>
@@ -1293,11 +1040,8 @@ const currentCategoryTopBanner =
                 </div>
               )}
             </div>
-            )}
 
-            {!editMode && (
-              <>
-              <div className="px-5 pt-4 border-t border-slate-100 mt-4">
+            <div className="px-5 pt-4 border-t border-slate-100 mt-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="text-[16px] font-extrabold text-slate-900">
@@ -1488,8 +1232,6 @@ const currentCategoryTopBanner =
                 {claimLoading ? '요청 중...' : '이 업소는 제 것입니다'}
               </button>
             </div>
-              </>
-            )}
           </div>
         </div>
       )}
