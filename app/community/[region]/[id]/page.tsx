@@ -88,11 +88,27 @@ export default function CommunityDetailPage({
       if (postData.business_id) {
         const { data: biz } = await sb
           .from('businesses')
-          .select('id, name_kr, name_en, category_main')
+          .select(`
+            id,
+            name_kr,
+            name_en,
+            category_main,
+            category_sub,
+            phone,
+            address,
+            city,
+            website,
+            rating,
+            review_count,
+            is_vip,
+            vip_tier
+          `)
           .eq('id', postData.business_id)
           .single()
 
         setBusiness(biz)
+      } else {
+        setBusiness(null)
       }
 
       const { data: commentData } = await sb
@@ -176,7 +192,9 @@ export default function CommunityDetailPage({
 
     setComments((prev) => prev.filter((c) => c.id !== commentId))
     setPost((prev: any) =>
-      prev ? { ...prev, comment_count: Math.max((prev.comment_count || 0) - 1, 0) } : prev
+      prev
+        ? { ...prev, comment_count: Math.max((prev.comment_count || 0) - 1, 0) }
+        : prev
     )
 
     setDeletingId('')
@@ -196,7 +214,7 @@ export default function CommunityDetailPage({
       </Link>
 
       <div className="bg-white p-5 rounded-2xl border space-y-4 shadow-sm">
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs flex-wrap">
           <span
             className={`px-2 py-1 rounded-full font-bold ${
               TYPE_STYLE[post.post_type]
@@ -204,6 +222,13 @@ export default function CommunityDetailPage({
           >
             {TYPE_LABEL[post.post_type]}
           </span>
+
+          {post.is_pinned && (
+            <span className="px-2 py-1 rounded-full font-bold bg-red-50 text-red-600">
+              공지
+            </span>
+          )}
+
           <span className="text-gray-400">{formatDate(post.created_at)}</span>
         </div>
 
@@ -220,15 +245,81 @@ export default function CommunityDetailPage({
         </div>
 
         {business && (
-          <div className="mt-2 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
-            <div className="text-xs text-indigo-500 font-bold mb-1">
-              연결 업소
-            </div>
-            <div className="font-bold text-slate-800">
-              {business.name_kr || business.name_en}
-            </div>
-            <div className="text-xs text-slate-500">
-              {business.category_main}
+          <div className="mt-2 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
+                    연결 업소
+                  </span>
+
+                  {business.is_vip && (
+                    <span className="text-[10px] font-bold bg-amber-300 text-amber-900 px-2 py-1 rounded-full">
+                      ⭐ {business.vip_tier?.toUpperCase() || 'VIP'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-[18px] font-extrabold text-slate-900">
+                  {business.name_kr || business.name_en}
+                </div>
+
+                {business.name_kr && business.name_en && (
+                  <div className="text-[12px] text-slate-400 mt-1">
+                    {business.name_en}
+                  </div>
+                )}
+
+                <div className="text-[12px] text-slate-500 mt-2 flex flex-wrap gap-2">
+                  {business.category_main && <span>{business.category_main}</span>}
+                  {business.category_sub && <span>· {business.category_sub}</span>}
+                  {business.city && <span>· {business.city}</span>}
+                </div>
+
+                {(business.rating > 0 || business.review_count > 0) && (
+                  <div className="text-[12px] text-slate-600 mt-2">
+                    ★ {Number(business.rating || 0).toFixed(1)} · 리뷰{' '}
+                    {(business.review_count || 0).toLocaleString()}개
+                  </div>
+                )}
+
+                {business.address && (
+                  <div className="text-[12px] text-slate-500 mt-2 leading-relaxed">
+                    {business.address}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 min-w-[96px]">
+                {business.website ? (
+                  <a
+                    href={business.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-center bg-indigo-600 text-white text-[12px] font-bold px-3 py-2 rounded-lg"
+                  >
+                    홈페이지
+                  </a>
+                ) : (
+                  <Link
+                    href={`/?region=${region}&search=${encodeURIComponent(
+                      business.name_kr || business.name_en || ''
+                    )}`}
+                    className="text-center bg-indigo-600 text-white text-[12px] font-bold px-3 py-2 rounded-lg"
+                  >
+                    업소 보기
+                  </Link>
+                )}
+
+                {business.phone && (
+                  <a
+                    href={`tel:${business.phone}`}
+                    className="text-center bg-white border border-slate-200 text-slate-700 text-[12px] font-bold px-3 py-2 rounded-lg"
+                  >
+                    전화하기
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         )}
