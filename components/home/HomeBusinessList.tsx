@@ -18,6 +18,7 @@ const CAT_BG: Record<string, string> = {
   'CPA·회계사': 'bg-cyan-50',
   여행: 'bg-blue-50',
   언론사: 'bg-zinc-100',
+  '기관·단체': 'bg-purple-50',
   기타: 'bg-slate-100',
 }
 
@@ -41,7 +42,7 @@ export default function HomeBusinessList({
   onToggleFav: (id: string, e: any) => void
   onOpenBusiness: (b: any) => void
 }) {
-  if (!biz.length) {
+  if (!biz || biz.length === 0) {
     return (
       <div className="text-center py-20 text-slate-400">
         검색 결과가 없습니다
@@ -63,7 +64,6 @@ export default function HomeBusinessList({
           <div
             key={b.id}
             onClick={() => onOpenBusiness(b)}
-            }}
             className={`bg-white rounded-xl border px-4 py-3.5 flex gap-3 cursor-pointer active:scale-[.99] transition-all ${
               b.is_vip ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'
             }`}
@@ -123,9 +123,9 @@ export default function HomeBusinessList({
                   </span>
                 )}
 
-                {b.rating > 0 && (
+                {Number(b.rating || 0) > 0 && (
                   <span className="text-[12px] font-bold text-slate-800">
-                    ★{Number(b.rating).toFixed(1)}{' '}
+                    ★{Number(b.rating || 0).toFixed(1)}{' '}
                     <span className="text-[11px] font-normal text-slate-400">
                       ({(b.review_count || 0).toLocaleString()})
                     </span>
