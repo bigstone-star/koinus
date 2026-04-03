@@ -293,11 +293,15 @@ export default function CommunityRegionPage({
   }
 
   const handleRegionChange = (nextRegion: string) => {
-    try {
-      localStorage.setItem('gj_region', nextRegion)
-    } catch {}
-    router.push(`/community/${nextRegion}`)
-  }
+  try {
+    localStorage.setItem('gj_region', nextRegion)
+    window.dispatchEvent(
+      new CustomEvent('gj_region_changed', { detail: nextRegion })
+    )
+  } catch {}
+
+  router.push(`/community/${nextRegion}`)
+}
 
   const filteredPosts = useMemo(() => {
     if (filter === 'all') return posts
