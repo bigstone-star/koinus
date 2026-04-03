@@ -587,13 +587,14 @@ export default function Home() {
 
   const regionLabel = REGIONS.find((r) => r.value === region)?.label || region
 
-  const openBusiness = async (b: any) => {
-  alert('openBusiness 실행됨')
+  const openBusiness = (b: any) => {
   setSel(b)
-  await loadReviews(b.id)
-  await loadRelatedCommunityPosts(b.id)
-}
 
+  setTimeout(() => {
+    loadReviews(b.id)
+    loadRelatedCommunityPosts(b.id)
+  }, 0)
+}
   const enabledSectionKeys = useMemo(
     () => sections.filter((s) => s.is_enabled).sort((a, b) => a.sort_order - b.sort_order),
     [sections]
