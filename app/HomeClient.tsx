@@ -216,7 +216,6 @@ export default function Home() {
         .from('businesses')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true)
-        .eq('approved', true)
         .eq('metro_area', region)
 
       if (!totalError && total !== null) {
@@ -242,7 +241,6 @@ export default function Home() {
             .from('businesses')
             .select('id', { count: 'exact', head: true })
             .eq('is_active', true)
-            .eq('approved', true)
             .eq('metro_area', region)
             .eq('category_main', category.name)
 
@@ -347,7 +345,6 @@ export default function Home() {
       .from('businesses')
       .select('*')
       .eq('is_active', true)
-      .eq('approved', true)
       .eq('metro_area', region)
 
     if (cat !== '전체') q = q.eq('category_main', cat)
