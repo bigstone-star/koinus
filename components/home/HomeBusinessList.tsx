@@ -21,7 +21,7 @@ type Category = {
   id: string
   name: string
   icon: string
-  sort_order: number
+  sort_order?: number
 }
 
 export default function HomeBusinessList({
@@ -71,20 +71,25 @@ export default function HomeBusinessList({
             </div>
 
             <div className="flex-1 min-w-0">
-              {(b.is_vip || b.category_sub) && (
-                <div className="flex gap-1 mb-1 flex-wrap">
-                  {b.is_vip && b.vip_tier && (
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">
-                      ⭐ {b.vip_tier.toUpperCase()}
-                    </span>
-                  )}
-                  {b.category_sub && (
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                      {b.category_sub}
-                    </span>
-                  )}
-                </div>
-              )}
+              <div className="flex gap-1 mb-1 flex-wrap">
+                {!b.approved && (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-300 text-slate-700">
+                    검토중
+                  </span>
+                )}
+
+                {b.is_vip && b.vip_tier && (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">
+                    ⭐ {b.vip_tier.toUpperCase()}
+                  </span>
+                )}
+
+                {b.category_sub && (
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                    {b.category_sub}
+                  </span>
+                )}
+              </div>
 
               <div className="text-[16px] font-bold text-slate-900 truncate">
                 {b.name_kr || b.name_en}
@@ -112,6 +117,7 @@ export default function HomeBusinessList({
                     {b.city}
                   </span>
                 )}
+
                 {b.rating > 0 && (
                   <span className="text-[12px] font-bold text-slate-800">
                     ★{Number(b.rating).toFixed(1)}{' '}
@@ -120,6 +126,7 @@ export default function HomeBusinessList({
                     </span>
                   </span>
                 )}
+
                 {b.phone && (
                   <span className="text-[12px] font-bold text-indigo-600">
                     {b.phone}
