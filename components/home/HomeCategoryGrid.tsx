@@ -4,7 +4,6 @@ type Category = {
   id: string
   name: string
   icon: string
-  sort_order?: number
 }
 
 export default function HomeCategoryGrid({
@@ -25,7 +24,10 @@ export default function HomeCategoryGrid({
 
   return (
     <div className="bg-white px-3 py-3">
-      <div className="grid grid-cols-5 gap-2">
+
+      {/* 🔥 핵심: flex + wrap */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+
         {visibleCats.map((c) => {
           const isActive = selected === c.name
 
@@ -33,20 +35,27 @@ export default function HomeCategoryGrid({
             <button
               key={c.name}
               onClick={() => onSelectCategory(c.name)}
-              className={[
-                'h-[62px] rounded-lg border flex flex-col items-center justify-center text-center px-1 transition-all',
-                isActive
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                  : 'bg-slate-50 text-slate-700 border-slate-200',
-              ].join(' ')}
+              style={{
+                width: '18%',          // 👉 5개 고정
+                height: '62px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: isActive ? '#4f46e5' : '#f8fafc',
+                color: isActive ? '#fff' : '#334155',
+                fontSize: '11px',
+                fontWeight: '700',
+              }}
             >
-              <div className="text-[18px] leading-none">{c.icon}</div>
-              <div className="mt-1 text-[10px] font-bold leading-tight break-keep">
-                {c.name}
-              </div>
+              <div style={{ fontSize: '18px' }}>{c.icon}</div>
+              <div style={{ marginTop: '4px' }}>{c.name}</div>
             </button>
           )
         })}
+
       </div>
     </div>
   )
