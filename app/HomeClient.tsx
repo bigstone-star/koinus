@@ -59,9 +59,9 @@ const REGION_META: Record<string, { title: string; subtitle: string }> = {
     subtitle: 'Fort Worth, TX · 한인 비즈니스 디렉토리',
   },
   central_texas: {
-  title: '교차로 텍사스 중부',
-  subtitle: 'Central Texas · 한인 비즈니스 디렉토리',
-},
+    title: '교차로 텍사스 중부',
+    subtitle: 'Central Texas · 한인 비즈니스 디렉토리',
+  },
 }
 
 type Category = {
@@ -71,6 +71,16 @@ type Category = {
   sort_order: number
 }
 
+type CommunityPreviewPost = {
+  id: string
+  region: string
+  post_type: 'general' | 'question' | 'recommend' | 'news'
+  title: string
+  like_count?: number | null
+  comment_count?: number | null
+  created_at?: string | null
+}
+
 export default function Home() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -78,6 +88,9 @@ export default function Home() {
   const hasWrittenUrl = useRef(false)
 
   const [biz, setBiz] = useState<any[]>([])
+  const [vipBiz, setVipBiz] = useState<any[]>([])
+  const [communityPosts, setCommunityPosts] = useState<CommunityPreviewPost[]>([])
+
   const [siteName, setSiteName] = useState('교차로 휴스턴')
   const [headerLogoUrl, setHeaderLogoUrl] = useState('')
   const [headerLogoWidth, setHeaderLogoWidth] = useState(140)
@@ -86,7 +99,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [cat, setCat] = useState('전체')
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState('rating')
+  const [sort, setSort] = useState<'rating' | 'review_count' | 'name_en'>('rating')
   const [sel, setSel] = useState<any>(null)
   const [favs, setFavs] = useState<string[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -95,15 +108,15 @@ export default function Home() {
   const [totalCount, setTotalCount] = useState(0)
   const [region, setRegion] = useState('houston')
 
-const [topBanners, setTopBanners] = useState<any[]>([])
-const [middleBanners, setMiddleBanners] = useState<any[]>([])
-const [bottomBanners, setBottomBanners] = useState<any[]>([])
-const [categoryTopBanners, setCategoryTopBanners] = useState<any[]>([])
+  const [topBanners, setTopBanners] = useState<any[]>([])
+  const [middleBanners, setMiddleBanners] = useState<any[]>([])
+  const [bottomBanners, setBottomBanners] = useState<any[]>([])
+  const [categoryTopBanners, setCategoryTopBanners] = useState<any[]>([])
 
-const [topBannerIndex, setTopBannerIndex] = useState(0)
-const [middleBannerIndex, setMiddleBannerIndex] = useState(0)
-const [bottomBannerIndex, setBottomBannerIndex] = useState(0)
-const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
+  const [topBannerIndex, setTopBannerIndex] = useState(0)
+  const [middleBannerIndex, setMiddleBannerIndex] = useState(0)
+  const [bottomBannerIndex, setBottomBannerIndex] = useState(0)
+  const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
 
   const [reviews, setReviews] = useState<any[]>([])
   const [reviewLoading, setReviewLoading] = useState(false)
@@ -117,7 +130,7 @@ const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
 
   const [claimLoading, setClaimLoading] = useState(false)
 
-  const SORTS = ['rating', 'review_count', 'name_en']
+  const SORTS = ['rating', 'review_count', 'name_en'] as const
   const SORT_LABELS: Record<string, string> = {
     rating: '평점순',
     review_count: '리뷰순',
@@ -183,7 +196,9 @@ const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
 
     if (urlSearch) setSearch(urlSearch)
     if (urlCat) setCat(urlCat)
-    if (urlSort && SORTS.includes(urlSort)) setSort(urlSort)
+    if (urlSort && SORTS.includes(urlSort as any)) {
+      setSort(urlSort as 'rating' | 'review_count' | 'name_en')
+    }
 
     hasInitializedFromUrl.current = true
   }, [searchParams])
@@ -191,6 +206,9 @@ const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
   useEffect(() => {
     try {
       localStorage.setItem('gj_region', region)
+      window.dispatchEvent(
+        new CustomEvent('gj_region_changed', { detail: region })
+      )
     } catch {}
   }, [region])
 
@@ -240,37 +258,37 @@ const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
       })
   }, [region])
 
-useEffect(() => {
-  sb.from('banners')
-    .select('*')
-    .eq('is_active', true)
-    .eq('metro_area', region)
-    .order('created_at', { ascending: false })
-    .then(({ data, error }) => {
-      if (error || !data) {
-        setTopBanners([])
-        setMiddleBanners([])
-        setBottomBanners([])
-        setCategoryTopBanners([])
-        return
-      }
+  useEffect(() => {
+    sb.from('banners')
+      .select('*')
+      .eq('is_active', true)
+      .eq('metro_area', region)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setTopBanners([])
+          setMiddleBanners([])
+          setBottomBanners([])
+          setCategoryTopBanners([])
+          return
+        }
 
-      const top = data.filter((b: any) => b.position === 'home_top')
-      const middle = data.filter((b: any) => b.position === 'home_middle')
-      const bottom = data.filter((b: any) => b.position === 'home_bottom')
-      const categoryTop = data.filter((b: any) => b.position === 'category_top')
+        const top = data.filter((b: any) => b.position === 'home_top')
+        const middle = data.filter((b: any) => b.position === 'home_middle')
+        const bottom = data.filter((b: any) => b.position === 'home_bottom')
+        const categoryTop = data.filter((b: any) => b.position === 'category_top')
 
-      setTopBanners(top)
-      setMiddleBanners(middle)
-      setBottomBanners(bottom)
-      setCategoryTopBanners(categoryTop)
+        setTopBanners(top)
+        setMiddleBanners(middle)
+        setBottomBanners(bottom)
+        setCategoryTopBanners(categoryTop)
 
-      setTopBannerIndex(0)
-      setMiddleBannerIndex(0)
-      setBottomBannerIndex(0)
-      setCategoryTopBannerIndex(0)
-    })
-}, [region])
+        setTopBannerIndex(0)
+        setMiddleBannerIndex(0)
+        setBottomBannerIndex(0)
+        setCategoryTopBannerIndex(0)
+      })
+  }, [region])
 
   useEffect(() => {
     if (topBanners.length <= 1) return
@@ -297,13 +315,54 @@ useEffect(() => {
   }, [bottomBanners])
 
   useEffect(() => {
-  if (categoryTopBanners.length <= 1) return
-  const timer = setInterval(() => {
-    setCategoryTopBannerIndex((prev) => (prev + 1) % categoryTopBanners.length)
-  }, 4000)
-  return () => clearInterval(timer)
-}, [categoryTopBanners])
-  
+    if (categoryTopBanners.length <= 1) return
+    const timer = setInterval(() => {
+      setCategoryTopBannerIndex((prev) => (prev + 1) % categoryTopBanners.length)
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [categoryTopBanners])
+
+  const loadVipBusinesses = useCallback(async () => {
+    const { data, error } = await sb
+      .from('businesses')
+      .select('*')
+      .eq('is_active', true)
+      .eq('approved', true)
+      .eq('metro_area', region)
+      .eq('is_vip', true)
+      .order('korean_score', { ascending: false, nullsFirst: false })
+      .order('rating', { ascending: false, nullsFirst: false })
+      .order('review_count', { ascending: false, nullsFirst: false })
+      .limit(6)
+
+    if (error) {
+      console.error('vip business load error:', error)
+      setVipBiz([])
+      return
+    }
+
+    setVipBiz(data || [])
+  }, [region])
+
+  const loadCommunityPreview = useCallback(async () => {
+    const { data, error } = await sb
+      .from('community_posts')
+      .select('id, region, post_type, title, like_count, comment_count, created_at')
+      .eq('region', region)
+      .eq('is_active', true)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(3)
+
+    if (error) {
+      console.error('community preview load error:', error)
+      setCommunityPosts([])
+      return
+    }
+
+    setCommunityPosts((data || []) as CommunityPreviewPost[])
+  }, [region])
+
   const load = useCallback(async () => {
     setLoading(true)
 
@@ -332,17 +391,17 @@ useEffect(() => {
       )
     }
 
-q = q
-  .order('is_vip', { ascending: false })
-  .order('korean_score', { ascending: false, nullsFirst: false })
-  .order('rating', { ascending: false, nullsFirst: false })
-  .order('review_count', { ascending: false, nullsFirst: false })
+    q = q
+      .order('is_vip', { ascending: false })
+      .order('korean_score', { ascending: false, nullsFirst: false })
+      .order('rating', { ascending: false, nullsFirst: false })
+      .order('review_count', { ascending: false, nullsFirst: false })
 
-if (sort === 'name_en') {
-  q = q.order('name_en', { ascending: true })
-}
+    if (sort === 'name_en') {
+      q = q.order('name_en', { ascending: true })
+    }
 
-    const { data, error } = await q.limit(300)
+    const { data, error } = await q.limit(60)
 
     if (error) {
       console.error('business load error:', error)
@@ -356,8 +415,10 @@ if (sort === 'name_en') {
 
   useEffect(() => {
     if (!hasInitializedFromUrl.current) return
+    loadVipBusinesses()
+    loadCommunityPreview()
     load()
-  }, [load])
+  }, [loadVipBusinesses, loadCommunityPreview, load])
 
   const loadReviews = useCallback(
     async (businessId: string) => {
@@ -562,16 +623,16 @@ if (sort === 'name_en') {
   }
 
   const currentTopBanner =
-  topBanners.length > 0 ? topBanners[topBannerIndex] : null
+    topBanners.length > 0 ? topBanners[topBannerIndex] : null
 
-const currentMiddleBanner =
-  middleBanners.length > 0 ? middleBanners[middleBannerIndex] : null
+  const currentMiddleBanner =
+    middleBanners.length > 0 ? middleBanners[middleBannerIndex] : null
 
-const currentBottomBanner =
-  bottomBanners.length > 0 ? bottomBanners[bottomBannerIndex] : null
+  const currentBottomBanner =
+    bottomBanners.length > 0 ? bottomBanners[bottomBannerIndex] : null
 
-const currentCategoryTopBanner =
-  categoryTopBanners.length > 0 ? categoryTopBanners[categoryTopBannerIndex] : null
+  const currentCategoryTopBanner =
+    categoryTopBanners.length > 0 ? categoryTopBanners[categoryTopBannerIndex] : null
 
   const renderBanner = (banner: any, className = '') => {
     if (!banner) return null
@@ -608,13 +669,19 @@ const currentCategoryTopBanner =
 
   const avgRating =
     reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) /
-        reviews.length
+      ? reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length
       : 0
 
   const regionMeta = REGION_META[region] || REGION_META.houston
   const displaySiteName =
     headerLogoUrl && !showTextLogo ? siteName : regionMeta.title
+
+  const postTypeLabel = (type?: string) => {
+    if (type === 'question') return '질문'
+    if (type === 'recommend') return '추천'
+    if (type === 'news') return '소식'
+    return '일반'
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
@@ -682,17 +749,10 @@ const currentCategoryTopBanner =
           <select
             value={region}
             onChange={(e) => {
-  const nextRegion = e.target.value
-  setRegion(nextRegion)
-  setCat('전체')
-
-  try {
-    localStorage.setItem('gj_region', nextRegion)
-    window.dispatchEvent(
-      new CustomEvent('gj_region_changed', { detail: nextRegion })
-    )
-  } catch {}
-}}
+              const nextRegion = e.target.value
+              setRegion(nextRegion)
+              setCat('전체')
+            }}
             className="bg-white/10 border border-white/15 rounded-lg px-3 text-[12px] font-bold text-white/80 h-10"
           >
             {REGIONS.map((r) => (
@@ -725,6 +785,105 @@ const currentCategoryTopBanner =
 
       {currentTopBanner && (
         <div className="px-3 pt-3">{renderBanner(currentTopBanner)}</div>
+      )}
+
+      {cat === '전체' && (
+        <div className="px-3 pt-3 space-y-3">
+          {vipBiz.length > 0 && (
+            <div className="bg-white rounded-xl border border-amber-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-[14px] font-extrabold text-slate-900">
+                    ⭐ {REGIONS.find((r) => r.value === region)?.label} 추천 업소
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    선택된 지역 VIP 업소를 먼저 보여드립니다
+                  </div>
+                </div>
+
+                <Link
+                  href="/pricing"
+                  className="text-[11px] font-bold text-amber-700"
+                >
+                  VIP 안내
+                </Link>
+              </div>
+
+              <div className="space-y-2">
+                {vipBiz.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={async () => {
+                      setSel(b)
+                      await loadReviews(b.id)
+                    }}
+                    className="w-full text-left rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[14px] font-bold text-slate-900 truncate">
+                          {b.name_kr || b.name_en}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1 truncate">
+                          {b.category_main}
+                          {b.category_sub ? ` · ${b.category_sub}` : ''}
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] font-black px-2 py-1 rounded bg-amber-300 text-amber-900 whitespace-nowrap">
+                        ⭐ {b.vip_tier?.toUpperCase() || 'VIP'}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {communityPosts.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-[14px] font-extrabold text-slate-900">
+                    📢 커뮤니티 최신 글
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {REGIONS.find((r) => r.value === region)?.label} 지역 최신 글
+                  </div>
+                </div>
+
+                <Link
+                  href={`/community/${region}`}
+                  className="text-[11px] font-bold text-indigo-600"
+                >
+                  더보기
+                </Link>
+              </div>
+
+              <div className="space-y-2">
+                {communityPosts.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/community/${p.region}/${p.id}`}
+                    className="block rounded-lg border border-slate-100 px-3 py-3 hover:bg-slate-50"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                        {postTypeLabel(p.post_type)}
+                      </span>
+                    </div>
+                    <div className="text-[13px] font-bold text-slate-800 truncate">
+                      {p.title}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      댓글 {p.comment_count || 0} · ❤️ {p.like_count || 0}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {cat === '전체' ? (
@@ -761,39 +920,39 @@ const currentCategoryTopBanner =
             </div>
           )}
         </div>
-     ) : (
-  <>
-    <div className="bg-white border-b border-slate-200 px-4 py-3 mt-3">
-      <button
-        onClick={() => setCat('전체')}
-        className="text-[13px] font-bold text-slate-700 truncate text-left"
-      >
-        <span className="text-indigo-600">전체</span>
-        <span className="text-slate-300 mx-1">&gt;</span>
-        <span>{cat}</span>
-      </button>
-    </div>
+      ) : (
+        <>
+          <div className="bg-white border-b border-slate-200 px-4 py-3 mt-3">
+            <button
+              onClick={() => setCat('전체')}
+              className="text-[13px] font-bold text-slate-700 truncate text-left"
+            >
+              <span className="text-indigo-600">전체</span>
+              <span className="text-slate-300 mx-1">&gt;</span>
+              <span>{cat}</span>
+            </button>
+          </div>
 
-    {currentCategoryTopBanner && (
-      <div className="px-3 pt-3">{renderBanner(currentCategoryTopBanner)}</div>
-    )}
-  </>
-)}
+          {currentCategoryTopBanner && (
+            <div className="px-3 pt-3">{renderBanner(currentCategoryTopBanner)}</div>
+          )}
+        </>
+      )}
 
       <main className="px-3 py-2.5 pb-44 space-y-2">
         {!user && (
-  <Link
-    href="/auth/login"
-    className="block bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl px-4 py-3 mb-2"
-  >
-    <div className="text-white font-bold text-[14px]">
-      🏢 내 업소를 무료로 등록하세요!
-    </div>
-    <div className="text-white/70 text-[12px] mt-0.5">
-      Google 로그인 → 업소 등록 → VIP 업그레이드
-    </div>
-  </Link>
-)}
+          <Link
+            href="/auth/login"
+            className="block bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl px-4 py-3 mb-2"
+          >
+            <div className="text-white font-bold text-[14px]">
+              🏢 내 업소를 무료로 등록하세요!
+            </div>
+            <div className="text-white/70 text-[12px] mt-0.5">
+              Google 로그인 → 업소 등록 → VIP 업그레이드
+            </div>
+          </Link>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -819,9 +978,7 @@ const currentCategoryTopBanner =
                     await loadReviews(b.id)
                   }}
                   className={`bg-white rounded-xl border px-4 py-3.5 flex gap-3 cursor-pointer active:scale-[.99] transition-all ${
-                    b.is_vip
-                      ? 'border-amber-300 bg-amber-50/30'
-                      : 'border-slate-200'
+                    b.is_vip ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'
                   }`}
                 >
                   <div
@@ -895,9 +1052,7 @@ const currentCategoryTopBanner =
                     className="flex-shrink-0 self-start pt-0.5 p-1"
                   >
                     <span
-                      className={`text-xl ${
-                        isFav ? 'text-red-500' : 'text-slate-300'
-                      }`}
+                      className={`text-xl ${isFav ? 'text-red-500' : 'text-slate-300'}`}
                     >
                       {isFav ? '♥' : '♡'}
                     </span>
@@ -1082,9 +1237,7 @@ const currentCategoryTopBanner =
                             setReviewForm((prev) => ({ ...prev, rating: n }))
                           }
                           className={`text-2xl ${
-                            n <= reviewForm.rating
-                              ? 'text-amber-400'
-                              : 'text-slate-300'
+                            n <= reviewForm.rating ? 'text-amber-400' : 'text-slate-300'
                           }`}
                         >
                           ★
