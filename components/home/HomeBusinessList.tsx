@@ -109,6 +109,7 @@ export default function HomeBusinessList({
                     )}`}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(e: any) => e.stopPropagation()}
                     className="inline underline"
                   >
                     {addr}
