@@ -21,6 +21,35 @@ export default function GlobalHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
+    const init = async () => {
+      const { data } = await sb.auth.getUser()
+      const currentUser = data.user ?? null
+      setUser(currentUser)
+
+      if (!currentUser) {
+        setProfile(null)
+        return
+      }
+
+      const { data: p } = await sb
+        .from('user_profiles')
+        .select('name, nickname, role')
+        .eq('id', currentUser.id)
+        .maybeSingle()
+
+      setProfile(p || null)
+    }
+
+    const syncRegionFromStorage = () => {
+      try {
+        const savedRegion = localStorage.getItem('gj_region')
+        if (savedRegion) setCurrentRegion(savedRegion)
+        else setCurrentRegion('houston')
+      } catch {
+        setCurrentRegion('houston')
+      }
+    }
+
     init()
     syncRegionFromStorage()
 
@@ -40,11 +69,33 @@ export default function GlobalHeader() {
       }
     }
 
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange(async (_, session) => {
+      const nextUser = session?.user ?? null
+      setUser(nextUser)
+
+      if (!nextUser) {
+        setProfile(null)
+        setMenuOpen(false)
+        return
+      }
+
+      const { data: p } = await sb
+        .from('user_profiles')
+        .select('name, nickname, role')
+        .eq('id', nextUser.id)
+        .maybeSingle()
+
+      setProfile(p || null)
+    })
+
     window.addEventListener('gj_region_changed', handleRegionChanged)
     window.addEventListener('storage', handleStorage)
     document.addEventListener('mousedown', handleClickOutside)
 
     return () => {
+      subscription.unsubscribe()
       window.removeEventListener('gj_region_changed', handleRegionChanged)
       window.removeEventListener('storage', handleStorage)
       document.removeEventListener('mousedown', handleClickOutside)
@@ -52,28 +103,6 @@ export default function GlobalHeader() {
   }, [])
 
   useEffect(() => {
-    syncRegionFromStorage()
-    setMenuOpen(false)
-  }, [pathname])
-
-  const init = async () => {
-    const { data } = await sb.auth.getUser()
-    setUser(data.user)
-
-    if (data.user) {
-      const { data: p } = await sb
-        .from('user_profiles')
-        .select('name, role')
-        .eq('id', data.user.id)
-        .maybeSingle()
-
-      setProfile(p || null)
-    } else {
-      setProfile(null)
-    }
-  }
-
-  const syncRegionFromStorage = () => {
     try {
       const savedRegion = localStorage.getItem('gj_region')
       if (savedRegion) setCurrentRegion(savedRegion)
@@ -81,11 +110,18 @@ export default function GlobalHeader() {
     } catch {
       setCurrentRegion('houston')
     }
-  }
+
+    setMenuOpen(false)
+  }, [pathname])
 
   const signOut = async () => {
     await sb.auth.signOut()
+
+    // 로그아웃 직후 헤더 즉시 반영
+    setUser(null)
+    setProfile(null)
     setMenuOpen(false)
+
     router.push('/')
     router.refresh()
   }
@@ -104,6 +140,7 @@ export default function GlobalHeader() {
       : 'bg-white/10 text-white/90 border border-white/15'
 
   const displayName =
+    profile?.nickname ||
     profile?.name ||
     user?.user_metadata?.name ||
     user?.email?.split('@')?.[0] ||
