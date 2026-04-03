@@ -1,31 +1,18 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import HomeCommunityLatest from '@/components/home/HomeCommunityLatest'
+import HomeCategoryGrid from '@/components/home/HomeCategoryGrid'
+import HomeVipBusinesses from '@/components/home/HomeVipBusinesses'
+import HomeBusinessList from '@/components/home/HomeBusinessList'
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
-
-const CAT_BG: Record<string, string> = {
-  '식당·카페': 'bg-orange-50',
-  '마트·식품': 'bg-yellow-50',
-  의료: 'bg-blue-50',
-  치과: 'bg-emerald-50',
-  법률: 'bg-violet-50',
-  자동차: 'bg-amber-50',
-  미용: 'bg-pink-50',
-  교육: 'bg-green-50',
-  '금융·보험': 'bg-sky-50',
-  커뮤니티: 'bg-slate-50',
-  부동산: 'bg-orange-50',
-  세탁소: 'bg-teal-50',
-  한의원: 'bg-lime-50',
-  기타: 'bg-slate-100',
-}
 
 const REVIEW_TAGS = [
   '친절함',
@@ -45,25 +32,6 @@ const REGIONS = [
   { value: 'central_texas', label: 'Central Texas' },
 ]
 
-const REGION_META: Record<string, { title: string; subtitle: string }> = {
-  houston: {
-    title: '교차로 휴스턴',
-    subtitle: 'Houston, TX · 한인 비즈니스 디렉토리',
-  },
-  dallas: {
-    title: '교차로 달라스',
-    subtitle: 'Dallas, TX · 한인 비즈니스 디렉토리',
-  },
-  fort_worth: {
-    title: '교차로 포트워스',
-    subtitle: 'Fort Worth, TX · 한인 비즈니스 디렉토리',
-  },
-  central_texas: {
-    title: '교차로 텍사스 중부',
-    subtitle: 'Central Texas · 한인 비즈니스 디렉토리',
-  },
-}
-
 type Category = {
   id: string
   name: string
@@ -79,6 +47,17 @@ type CommunityPreviewPost = {
   like_count?: number | null
   comment_count?: number | null
   created_at?: string | null
+  business_id?: string | null
+}
+
+type SortType = 'rating' | 'review_count' | 'name_en'
+
+type HomeSection = {
+  id: string
+  section_key: string
+  section_label: string
+  is_enabled: boolean
+  sort_order: number
 }
 
 export default function Home() {
@@ -87,19 +66,17 @@ export default function Home() {
   const hasInitializedFromUrl = useRef(false)
   const hasWrittenUrl = useRef(false)
 
+  const [sections, setSections] = useState<HomeSection[]>([])
+
   const [biz, setBiz] = useState<any[]>([])
   const [vipBiz, setVipBiz] = useState<any[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPreviewPost[]>([])
-
-  const [siteName, setSiteName] = useState('교차로 휴스턴')
-  const [headerLogoUrl, setHeaderLogoUrl] = useState('')
-  const [headerLogoWidth, setHeaderLogoWidth] = useState(140)
-  const [showTextLogo, setShowTextLogo] = useState(false)
+  const [relatedCommunityPosts, setRelatedCommunityPosts] = useState<CommunityPreviewPost[]>([])
 
   const [loading, setLoading] = useState(true)
   const [cat, setCat] = useState('전체')
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<'rating' | 'review_count' | 'name_en'>('rating')
+  const [sort, setSort] = useState<SortType>('rating')
   const [sel, setSel] = useState<any>(null)
   const [favs, setFavs] = useState<string[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -107,16 +84,6 @@ export default function Home() {
   const [cats, setCats] = useState<Category[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [region, setRegion] = useState('houston')
-
-  const [topBanners, setTopBanners] = useState<any[]>([])
-  const [middleBanners, setMiddleBanners] = useState<any[]>([])
-  const [bottomBanners, setBottomBanners] = useState<any[]>([])
-  const [categoryTopBanners, setCategoryTopBanners] = useState<any[]>([])
-
-  const [topBannerIndex, setTopBannerIndex] = useState(0)
-  const [middleBannerIndex, setMiddleBannerIndex] = useState(0)
-  const [bottomBannerIndex, setBottomBannerIndex] = useState(0)
-  const [categoryTopBannerIndex, setCategoryTopBannerIndex] = useState(0)
 
   const [reviews, setReviews] = useState<any[]>([])
   const [reviewLoading, setReviewLoading] = useState(false)
@@ -129,27 +96,9 @@ export default function Home() {
   })
 
   const [claimLoading, setClaimLoading] = useState(false)
-
-  const SORTS = ['rating', 'review_count', 'name_en'] as const
-  const SORT_LABELS: Record<string, string> = {
-    rating: '평점순',
-    review_count: '리뷰순',
-    name_en: '이름순',
-  }
+  const [relatedPostsLoading, setRelatedPostsLoading] = useState(false)
 
   useEffect(() => {
-    sb.from('site_settings')
-      .select('site_name, header_logo_url, header_logo_width, show_text_logo')
-      .limit(1)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error || !data) return
-        setSiteName(data.site_name || '교차로 휴스턴')
-        setHeaderLogoUrl(data.header_logo_url || '')
-        setHeaderLogoWidth(data.header_logo_width || 140)
-        setShowTextLogo(!!data.show_text_logo)
-      })
-
     try {
       setFavs(JSON.parse(localStorage.getItem('gj_favs') || '[]'))
     } catch {}
@@ -174,8 +123,30 @@ export default function Home() {
         setCats([allCat, ...(data || [])])
       })
 
+    loadSections()
+
     return () => subscription.unsubscribe()
   }, [])
+
+  const loadSections = async () => {
+    const { data, error } = await sb
+      .from('home_sections')
+      .select('*')
+      .eq('is_enabled', true)
+      .order('sort_order', { ascending: true })
+
+    if (error || !data || data.length === 0) {
+      setSections([
+        { id: '1', section_key: 'community_latest', section_label: '커뮤니티 최신글', is_enabled: true, sort_order: 1 },
+        { id: '2', section_key: 'category_grid', section_label: '업소 카테고리', is_enabled: true, sort_order: 2 },
+        { id: '3', section_key: 'vip_businesses', section_label: '지역 추천업소', is_enabled: true, sort_order: 3 },
+        { id: '4', section_key: 'business_list', section_label: '일반 업소 리스트', is_enabled: true, sort_order: 4 },
+      ])
+      return
+    }
+
+    setSections(data as HomeSection[])
+  }
 
   useEffect(() => {
     if (hasInitializedFromUrl.current) return
@@ -196,8 +167,12 @@ export default function Home() {
 
     if (urlSearch) setSearch(urlSearch)
     if (urlCat) setCat(urlCat)
-    if (urlSort && SORTS.includes(urlSort as any)) {
-      setSort(urlSort as 'rating' | 'review_count' | 'name_en')
+    if (
+      urlSort === 'rating' ||
+      urlSort === 'review_count' ||
+      urlSort === 'name_en'
+    ) {
+      setSort(urlSort)
     }
 
     hasInitializedFromUrl.current = true
@@ -258,70 +233,6 @@ export default function Home() {
       })
   }, [region])
 
-  useEffect(() => {
-    sb.from('banners')
-      .select('*')
-      .eq('is_active', true)
-      .eq('metro_area', region)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error || !data) {
-          setTopBanners([])
-          setMiddleBanners([])
-          setBottomBanners([])
-          setCategoryTopBanners([])
-          return
-        }
-
-        const top = data.filter((b: any) => b.position === 'home_top')
-        const middle = data.filter((b: any) => b.position === 'home_middle')
-        const bottom = data.filter((b: any) => b.position === 'home_bottom')
-        const categoryTop = data.filter((b: any) => b.position === 'category_top')
-
-        setTopBanners(top)
-        setMiddleBanners(middle)
-        setBottomBanners(bottom)
-        setCategoryTopBanners(categoryTop)
-
-        setTopBannerIndex(0)
-        setMiddleBannerIndex(0)
-        setBottomBannerIndex(0)
-        setCategoryTopBannerIndex(0)
-      })
-  }, [region])
-
-  useEffect(() => {
-    if (topBanners.length <= 1) return
-    const timer = setInterval(() => {
-      setTopBannerIndex((prev) => (prev + 1) % topBanners.length)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [topBanners])
-
-  useEffect(() => {
-    if (middleBanners.length <= 1) return
-    const timer = setInterval(() => {
-      setMiddleBannerIndex((prev) => (prev + 1) % middleBanners.length)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [middleBanners])
-
-  useEffect(() => {
-    if (bottomBanners.length <= 1) return
-    const timer = setInterval(() => {
-      setBottomBannerIndex((prev) => (prev + 1) % bottomBanners.length)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [bottomBanners])
-
-  useEffect(() => {
-    if (categoryTopBanners.length <= 1) return
-    const timer = setInterval(() => {
-      setCategoryTopBannerIndex((prev) => (prev + 1) % categoryTopBanners.length)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [categoryTopBanners])
-
   const loadVipBusinesses = useCallback(async () => {
     const { data, error } = await sb
       .from('businesses')
@@ -363,6 +274,33 @@ export default function Home() {
     setCommunityPosts((data || []) as CommunityPreviewPost[])
   }, [region])
 
+  const loadRelatedCommunityPosts = useCallback(
+    async (businessId: string) => {
+      setRelatedPostsLoading(true)
+
+      const { data, error } = await sb
+        .from('community_posts')
+        .select('id, region, post_type, title, like_count, comment_count, created_at, business_id')
+        .eq('region', region)
+        .eq('is_active', true)
+        .eq('business_id', businessId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(4)
+
+      if (error) {
+        console.error('related community posts load error:', error)
+        setRelatedCommunityPosts([])
+        setRelatedPostsLoading(false)
+        return
+      }
+
+      setRelatedCommunityPosts((data || []) as CommunityPreviewPost[])
+      setRelatedPostsLoading(false)
+    },
+    [region]
+  )
+
   const load = useCallback(async () => {
     setLoading(true)
 
@@ -391,14 +329,10 @@ export default function Home() {
       )
     }
 
-    if (cat === '전체' && !normalizedSearch) {
-      q = q.eq('is_vip', false)
-    }
-
     q = q
+      .order('is_vip', { ascending: true })
       .order('rating', { ascending: false, nullsFirst: false })
       .order('review_count', { ascending: false, nullsFirst: false })
-      .order('korean_score', { ascending: false, nullsFirst: false })
 
     if (sort === 'name_en') {
       q = q.order('name_en', { ascending: true })
@@ -420,10 +354,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!hasInitializedFromUrl.current) return
-    loadVipBusinesses()
     loadCommunityPreview()
+    loadVipBusinesses()
     load()
-  }, [loadVipBusinesses, loadCommunityPreview, load])
+  }, [loadCommunityPreview, loadVipBusinesses, load])
 
   const loadReviews = useCallback(
     async (businessId: string) => {
@@ -597,29 +531,11 @@ export default function Home() {
     })
   }
 
-  const signOut = async () => {
-    await sb.auth.signOut()
-    setUser(null)
-    router.push('/')
-  }
-
-  const handleBannerClick = async (banner: any) => {
-    if (!banner?.id) return
-
-    try {
-      await sb
-        .from('banners')
-        .update({ click_count: (banner.click_count || 0) + 1 })
-        .eq('id', banner.id)
-    } catch (error) {
-      console.error('banner click count update failed:', error)
-    }
-  }
-
   const closeModal = () => {
     setSel(null)
     setReviews([])
     setMyReview(null)
+    setRelatedCommunityPosts([])
     setReviewForm({
       rating: 5,
       review_text: '',
@@ -627,70 +543,64 @@ export default function Home() {
     })
   }
 
-  const currentTopBanner =
-    topBanners.length > 0 ? topBanners[topBannerIndex] : null
-
-  const currentMiddleBanner =
-    middleBanners.length > 0 ? middleBanners[middleBannerIndex] : null
-
-  const currentBottomBanner =
-    bottomBanners.length > 0 ? bottomBanners[bottomBannerIndex] : null
-
-  const currentCategoryTopBanner =
-    categoryTopBanners.length > 0 ? categoryTopBanners[categoryTopBannerIndex] : null
-
-  const renderBanner = (banner: any, className = '') => {
-    if (!banner) return null
-
-    return (
-      <a
-        href={banner.link_url || '#'}
-        target="_blank"
-        rel="noreferrer"
-        onClick={() => handleBannerClick(banner)}
-        className={`block rounded-xl overflow-hidden shadow-lg border border-slate-200 bg-white ${className}`}
-      >
-        {banner.image_url ? (
-          <img
-            src={banner.image_url}
-            alt={banner.title || '배너'}
-            className="w-full h-20 object-cover"
-          />
-        ) : (
-          <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
-            <div className="text-[14px] font-extrabold">
-              {banner.title || '광고 배너'}
-            </div>
-            {banner.subtitle && (
-              <div className="text-[12px] text-white/80 mt-0.5">
-                {banner.subtitle}
-              </div>
-            )}
-          </div>
-        )}
-      </a>
-    )
-  }
-
   const avgRating =
     reviews.length > 0
       ? reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length
       : 0
 
-  const regionMeta = REGION_META[region] || REGION_META.houston
-  const displaySiteName =
-    headerLogoUrl && !showTextLogo ? siteName : regionMeta.title
+  const regionLabel = REGIONS.find((r) => r.value === region)?.label || region
 
-  const postTypeLabel = (type?: string) => {
-    if (type === 'question') return '질문'
-    if (type === 'recommend') return '추천'
-    if (type === 'news') return '소식'
-    return '일반'
+  const openBusiness = async (b: any) => {
+    setSel(b)
+    await loadReviews(b.id)
+    await loadRelatedCommunityPosts(b.id)
+  }
+
+  const enabledSectionKeys = useMemo(
+    () => sections.filter((s) => s.is_enabled).sort((a, b) => a.sort_order - b.sort_order),
+    [sections]
+  )
+
+  const sectionMap: Record<string, React.ReactNode> = {
+    community_latest: (
+      <HomeCommunityLatest
+        posts={communityPosts}
+        region={region}
+        regionLabel={regionLabel}
+      />
+    ),
+    category_grid: (
+      <HomeCategoryGrid
+        cats={cats}
+        counts={counts}
+        onSelectCategory={(name) => setCat(name)}
+      />
+    ),
+    vip_businesses: (
+      <HomeVipBusinesses vipBiz={vipBiz} onOpenBusiness={openBusiness} />
+    ),
+    business_list: (
+      <div className="px-3 py-3 pb-44">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <HomeBusinessList
+            biz={biz}
+            cats={cats}
+            favs={favs}
+            onToggleFav={toggleFav}
+            onOpenBusiness={openBusiness}
+          />
+        )}
+      </div>
+    ),
   }
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
-      <div className="bg-white border-b border-slate-200 px-3 py-3 sticky top-[60px] z-30">
+      <div className="bg-white border-b border-slate-200 px-3 py-3 sticky top-[56px] z-20">
         <div className="flex gap-2">
           <select
             value={region}
@@ -713,14 +623,14 @@ export default function Home() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="업소명, 한글명, 업종, 주소, 전화번호 검색..."
+              placeholder="업소명, 업종, 주소, 전화번호 검색"
               className="w-full bg-transparent border-none outline-none text-[13px] text-slate-700 py-2.5 placeholder:text-slate-400"
             />
           </div>
 
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as 'rating' | 'review_count' | 'name_en')}
+            onChange={(e) => setSort(e.target.value as SortType)}
             className="h-10 border border-slate-200 rounded-lg px-3 text-[12px] font-bold text-slate-700 bg-white whitespace-nowrap"
           >
             <option value="rating">평점순</option>
@@ -734,315 +644,11 @@ export default function Home() {
         </div>
       </div>
 
-      {currentTopBanner && (
-        <div className="px-3 pt-3">{renderBanner(currentTopBanner)}</div>
-      )}
-
-      {cat === '전체' && (
-        <div className="px-3 pt-3 space-y-3">
-          {communityPosts.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-[14px] font-extrabold text-slate-900">
-                    📢 커뮤니티 최신 글
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    {REGIONS.find((r) => r.value === region)?.label} 지역 최신 글
-                  </div>
-                </div>
-
-                <Link
-                  href={`/community/${region}`}
-                  className="text-[11px] font-bold text-indigo-600"
-                >
-                  더보기
-                </Link>
-              </div>
-
-              <div className="space-y-2">
-                {communityPosts.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={`/community/${p.region}/${p.id}`}
-                    className="block rounded-lg border border-slate-100 px-3 py-3 hover:bg-slate-50"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                        {postTypeLabel(p.post_type)}
-                      </span>
-                    </div>
-                    <div className="text-[13px] font-bold text-slate-800 truncate">
-                      {p.title}
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-1">
-                      댓글 {p.comment_count || 0} · ❤️ {p.like_count || 0}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {vipBiz.length > 0 && (
-            <div className="bg-white rounded-xl border border-amber-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-[14px] font-extrabold text-slate-900">
-                    ⭐ {REGIONS.find((r) => r.value === region)?.label} 추천 업소
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    선택된 지역 VIP 업소를 먼저 보여드립니다
-                  </div>
-                </div>
-
-                <Link
-                  href="/pricing"
-                  className="text-[11px] font-bold text-amber-700"
-                >
-                  VIP 안내
-                </Link>
-              </div>
-
-              <div className="space-y-2">
-                {vipBiz.map((b) => (
-                  <button
-                    key={b.id}
-                    onClick={async () => {
-                      setSel(b)
-                      await loadReviews(b.id)
-                    }}
-                    className="w-full text-left rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-[14px] font-bold text-slate-900 truncate">
-                          {b.name_kr || b.name_en}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-1 truncate">
-                          {b.category_main}
-                          {b.category_sub ? ` · ${b.category_sub}` : ''}
-                        </div>
-                      </div>
-
-                      <div className="text-[10px] font-black px-2 py-1 rounded bg-amber-300 text-amber-900 whitespace-nowrap">
-                        ⭐ {b.vip_tier?.toUpperCase() || 'VIP'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+      {enabledSectionKeys.map((section) => (
+        <div key={section.id} className={section.section_key === 'business_list' ? '' : 'px-3 pt-3'}>
+          {sectionMap[section.section_key]}
         </div>
-      )}
-
-      {cat === '전체' ? (
-        <div className="bg-white border-b border-slate-200 px-3.5 py-3.5 mt-3">
-          <div className="text-[11px] font-bold text-slate-400 tracking-widest mb-2.5">
-            카테고리
-          </div>
-
-          {cats.length === 0 ? (
-            <div className="text-[12px] text-slate-400 py-2">
-              카테고리 불러오는 중...
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {cats.map((c) => (
-                <button
-                  key={c.name}
-                  onClick={() => setCat(c.name)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border-[1.5px] border-slate-200 bg-white transition-all active:scale-[.97] text-left hover:bg-slate-50"
-                >
-                  <span className="text-[20px] w-6 text-center flex-shrink-0">
-                    {c.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-[13px] font-bold block truncate text-slate-800">
-                      {c.name}
-                    </span>
-                    <span className="text-[10px] block mt-0.5 text-slate-400">
-                      {counts[c.name] ?? 0}개
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="bg-white border-b border-slate-200 px-4 py-3 mt-3">
-            <button
-              onClick={() => setCat('전체')}
-              className="text-[13px] font-bold text-slate-700 truncate text-left"
-            >
-              <span className="text-indigo-600">전체</span>
-              <span className="text-slate-300 mx-1">&gt;</span>
-              <span>{cat}</span>
-            </button>
-          </div>
-
-          {currentCategoryTopBanner && (
-            <div className="px-3 pt-3">{renderBanner(currentCategoryTopBanner)}</div>
-          )}
-        </>
-      )}
-
-      <main className="px-3 py-2.5 pb-44 space-y-2">
-        {!user && (
-          <Link
-            href="/auth/login"
-            className="block bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl px-4 py-3 mb-2"
-          >
-            <div className="text-white font-bold text-[14px]">
-              🏢 내 업소를 무료로 등록하세요!
-            </div>
-            <div className="text-white/70 text-[12px] mt-0.5">
-              Google 로그인 → 업소 등록 → VIP 업그레이드
-            </div>
-          </Link>
-        )}
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : biz.length === 0 ? (
-          <div className="text-center py-20 text-slate-400">
-            검색 결과가 없습니다
-          </div>
-        ) : (
-          biz.map((b, index) => {
-            const catInfo =
-              cats.find((c) => c.name === b.category_main) || cats[cats.length - 1]
-            const isFav = favs.includes(b.id)
-            const addr =
-              b.address?.split(',').slice(0, -2).join(',').trim() || b.address
-
-            return (
-              <div key={b.id}>
-                <div
-                  onClick={async () => {
-                    setSel(b)
-                    await loadReviews(b.id)
-                  }}
-                  className={`bg-white rounded-xl border px-4 py-3.5 flex gap-3 cursor-pointer active:scale-[.99] transition-all ${
-                    b.is_vip ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'
-                  }`}
-                >
-                  <div
-                    className={`w-11 h-11 rounded-lg flex items-center justify-center text-2xl flex-shrink-0 ${
-                      CAT_BG[b.category_main] || 'bg-slate-50'
-                    }`}
-                  >
-                    {catInfo?.icon || '📋'}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    {(b.is_vip || b.category_sub) && (
-                      <div className="flex gap-1 mb-1 flex-wrap">
-                        {b.is_vip && b.vip_tier && (
-                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">
-                            ⭐ {b.vip_tier.toUpperCase()}
-                          </span>
-                        )}
-                        {b.category_sub && (
-                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                            {b.category_sub}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="text-[16px] font-bold text-slate-900 truncate">
-                      {b.name_kr || b.name_en}
-                    </div>
-
-                    {addr && (
-                      <div className="text-[12px] text-slate-500 truncate mt-0.5">
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                            addr
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline underline"
-                        >
-                          {addr}
-                        </a>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2.5 mt-1 flex-wrap">
-                      {b.city && (
-                        <span className="text-[11px] font-bold text-slate-400">
-                          {b.city}
-                        </span>
-                      )}
-                      {b.rating > 0 && (
-                        <span className="text-[12px] font-bold text-slate-800">
-                          ★{Number(b.rating).toFixed(1)}{' '}
-                          <span className="text-[11px] font-normal text-slate-400">
-                            ({(b.review_count || 0).toLocaleString()})
-                          </span>
-                        </span>
-                      )}
-                      {b.phone && (
-                        <span className="text-[12px] font-bold text-indigo-600">
-                          {b.phone}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={(e: any) => toggleFav(b.id, e)}
-                    className="flex-shrink-0 self-start pt-0.5 p-1"
-                  >
-                    <span
-                      className={`text-xl ${isFav ? 'text-red-500' : 'text-slate-300'}`}
-                    >
-                      {isFav ? '♥' : '♡'}
-                    </span>
-                  </button>
-                </div>
-
-                {currentMiddleBanner && index === 3 && (
-                  <div className="pt-2">{renderBanner(currentMiddleBanner)}</div>
-                )}
-              </div>
-            )
-          })
-        )}
-      </main>
-
-      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-slate-200 flex z-30">
-        {[
-          { href: '/', icon: '🏠', label: '홈', active: true },
-          { href: '/register', icon: '➕', label: '업소등록', active: false },
-          { href: '/pricing', icon: '⭐', label: 'VIP', active: false },
-          {
-            href: user ? '/dashboard' : '/auth/login',
-            icon: '👤',
-            label: user ? '내정보' : '로그인',
-            active: false,
-          },
-        ].map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 ${
-              item.active ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-xl">{item.icon}</span>
-            <span className="text-[10px] font-bold">{item.label}</span>
-          </Link>
-        ))}
-      </nav>
+      ))}
 
       {sel && (
         <div
@@ -1051,10 +657,7 @@ export default function Home() {
         >
           <div className="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto pb-10">
             <div className="flex justify-end px-5 pt-4">
-              <button
-                onClick={closeModal}
-                className="text-slate-400 text-2xl"
-              >
+              <button onClick={closeModal} className="text-slate-400 text-2xl">
                 ✕
               </button>
             </div>
@@ -1156,6 +759,55 @@ export default function Home() {
             </div>
 
             <div className="px-5 pt-4 border-t border-slate-100 mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-[16px] font-extrabold text-slate-900">
+                    관련 커뮤니티 글
+                  </div>
+                  <div className="text-[12px] text-slate-400 mt-0.5">
+                    이 업소와 연결된 글을 바로 볼 수 있습니다
+                  </div>
+                </div>
+              </div>
+
+              {relatedPostsLoading ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : relatedCommunityPosts.length === 0 ? (
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 text-[13px] text-slate-400 mb-4">
+                  아직 연결된 커뮤니티 글이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {relatedCommunityPosts.map((p) => (
+                    <Link
+                      key={p.id}
+                      href={`/community/${p.region}/${p.id}`}
+                      className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                          {p.post_type === 'question'
+                            ? '질문'
+                            : p.post_type === 'recommend'
+                              ? '추천'
+                              : p.post_type === 'news'
+                                ? '소식'
+                                : '일반'}
+                        </span>
+                      </div>
+                      <div className="text-[13px] font-bold text-slate-800">
+                        {p.title}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        댓글 {p.comment_count || 0} · ❤️ {p.like_count || 0}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="text-[16px] font-extrabold text-slate-900">
@@ -1347,19 +999,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
-      {currentBottomBanner && (
-        <div className="fixed bottom-16 left-0 right-0 max-w-lg mx-auto z-40 px-3">
-          {renderBanner(currentBottomBanner)}
-        </div>
-      )}
-
-      <button
-        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className="fixed bottom-24 right-4 w-10 h-10 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center z-40"
-      >
-        ↑
-      </button>
     </div>
   )
 }
