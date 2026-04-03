@@ -716,7 +716,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
-      <GlobalHeader />
 
       <div className="bg-white border-b border-slate-200 px-3 py-3 sticky top-0 z-20">
         <div className="flex gap-2">
