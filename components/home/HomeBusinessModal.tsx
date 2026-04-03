@@ -21,7 +21,20 @@ export default function HomeBusinessModal({
   const displayRating = (avgRating&&avgRating>0) ? avgRating : Number(sel.rating||0)
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-end" onClick={(e:any)=>{ if(e.target===e.currentTarget) onClose() }}>
+    <div
+  style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999999,
+    background: 'rgba(0,0,0,0.6)',
+    display: 'flex',
+    alignItems: 'flex-end',
+  }}
+  onClick={(e:any)=>{ if(e.target===e.currentTarget) onClose() }}
+>
       <div className="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-slate-100 px-5 pt-5 pb-3 flex items-start justify-between z-10">
           <div className="flex-1 min-w-0 pr-3">
