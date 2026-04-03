@@ -682,9 +682,17 @@ const currentCategoryTopBanner =
           <select
             value={region}
             onChange={(e) => {
-              setRegion(e.target.value)
-              setCat('전체')
-            }}
+  const nextRegion = e.target.value
+  setRegion(nextRegion)
+  setCat('전체')
+
+  try {
+    localStorage.setItem('gj_region', nextRegion)
+    window.dispatchEvent(
+      new CustomEvent('gj_region_changed', { detail: nextRegion })
+    )
+  } catch {}
+}}
             className="bg-white/10 border border-white/15 rounded-lg px-3 text-[12px] font-bold text-white/80 h-10"
           >
             {REGIONS.map((r) => (
