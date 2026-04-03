@@ -19,14 +19,39 @@ export default function GlobalHeader() {
 
   useEffect(() => {
     init()
+    syncRegionFromStorage()
 
+    const handleRegionChanged = (e: any) => {
+      const nextRegion = e?.detail || 'houston'
+      setCurrentRegion(nextRegion)
+    }
+
+    const handleStorage = () => {
+      syncRegionFromStorage()
+    }
+
+    window.addEventListener('gj_region_changed', handleRegionChanged)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('gj_region_changed', handleRegionChanged)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
+  useEffect(() => {
+    syncRegionFromStorage()
+  }, [pathname])
+
+  const syncRegionFromStorage = () => {
     try {
       const savedRegion = localStorage.getItem('gj_region')
-      if (savedRegion) {
-        setCurrentRegion(savedRegion)
-      }
-    } catch {}
-  }, [])
+      if (savedRegion) setCurrentRegion(savedRegion)
+      else setCurrentRegion('houston')
+    } catch {
+      setCurrentRegion('houston')
+    }
+  }
 
   const init = async () => {
     const { data } = await sb.auth.getUser()
