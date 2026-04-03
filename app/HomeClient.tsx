@@ -8,6 +8,7 @@ import HomeCommunityLatest from '@/components/home/HomeCommunityLatest'
 import HomeCategoryGrid from '@/components/home/HomeCategoryGrid'
 import HomeVipBusinesses from '@/components/home/HomeVipBusinesses'
 import HomeBusinessList from '@/components/home/HomeBusinessList'
+import HomeBusinessModal from '@/components/home/HomeBusinessModal'
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -608,6 +609,7 @@ export default function Home() {
     category_grid: (
       <HomeCategoryGrid
         cats={cats}
+        selected={cat}
         counts={counts}
         onSelectCategory={(name) => setCat(name)}
       />
@@ -686,361 +688,24 @@ export default function Home() {
         </div>
       ))}
 
-      {sel && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-end"
-          onClick={(e: any) => e.target === e.currentTarget && closeModal()}
-        >
-          <div className="bg-white rounded-t-2xl w-full max-h-[90vh] overflow-y-auto pb-10">
-            <div className="flex justify-end px-5 pt-4">
-              <button onClick={closeModal} className="text-slate-400 text-2xl">
-                ✕
-              </button>
-            </div>
-
-            <div className="px-5 pb-4 border-b border-slate-100">
-              <div className="text-[12px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full inline-block mb-2">
-                {sel.category_main}
-                {sel.category_sub ? ' · ' + sel.category_sub : ''}
-              </div>
-
-              <h2 className="text-[22px] font-extrabold text-slate-900">
-                {sel.name_kr || sel.name_en}
-              </h2>
-
-              {sel.name_kr && sel.name_en && (
-                <p className="text-[13px] text-slate-400">{sel.name_en}</p>
-              )}
-
-              {sel.rating > 0 && (
-                <div className="mt-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-400">
-                      {'★'.repeat(Math.max(1, Math.round(Number(sel.rating))))}
-                    </span>
-                    <span className="font-bold">
-                      {Number(sel.rating).toFixed(1)}
-                    </span>
-                    <span className="text-[13px] text-slate-400">
-                      외부 평점 · {(sel.review_count || 0).toLocaleString()}개
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {sel.description_kr && (
-                <p className="text-[13px] text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2.5">
-                  {sel.description_kr}
-                </p>
-              )}
-            </div>
-
-            <div className="px-5 py-2 space-y-3">
-              {sel.address && (
-                <div className="flex gap-3 py-2">
-                  <span>📍</span>
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      주소
-                    </div>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                        sel.address
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline text-[14px] font-semibold text-indigo-600 underline"
-                    >
-                      {sel.address}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {sel.phone && (
-                <div className="flex gap-3 py-2">
-                  <span>📞</span>
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      전화
-                    </div>
-                    <a
-                      href={'tel:' + sel.phone}
-                      className="text-[14px] font-semibold text-indigo-600"
-                    >
-                      {sel.phone}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {sel.website && (
-                <div className="flex gap-3 py-2">
-                  <span>🌐</span>
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      웹사이트
-                    </div>
-                    <a
-                      href={sel.website}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[14px] font-semibold text-indigo-600"
-                    >
-                      방문하기 →
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="px-5 pt-4 border-t border-slate-100 mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-[16px] font-extrabold text-slate-900">
-                    관련 커뮤니티 글
-                  </div>
-                  <div className="text-[12px] text-slate-400 mt-0.5">
-                    이 업소와 연결된 글을 바로 볼 수 있습니다
-                  </div>
-                </div>
-              </div>
-
-              {relatedPostsLoading ? (
-                <div className="flex justify-center py-6">
-                  <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : relatedCommunityPosts.length === 0 ? (
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 text-[13px] text-slate-400 mb-4">
-                  아직 연결된 커뮤니티 글이 없습니다.
-                </div>
-              ) : (
-                <div className="space-y-2 mb-4">
-                  {relatedCommunityPosts.map((p) => (
-                    <Link
-  key={p.id}
-  href={`/community/${p.region}/${p.id}`}
-  className="block px-3 py-2 rounded-lg border border-slate-100 hover:bg-slate-50"
->
-  <div className="flex items-center justify-between gap-2">
-
-    {/* 왼쪽 */}
-    <div className="flex items-center gap-2 min-w-0">
-
-      {/* 카테고리 */}
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
-        {postTypeLabel(p.post_type)}
-      </span>
-
-      {/* 제목 (한줄 제한) */}
-      <span className="text-[13px] font-bold text-slate-800 truncate">
-        {p.title}
-      </span>
-
-    </div>
-
-    {/* 오른쪽 */}
-    <div className="text-[11px] text-slate-400 shrink-0">
-      💬 {p.comment_count || 0} ❤️ {p.like_count || 0}
-    </div>
-
-  </div>
-</Link>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-[16px] font-extrabold text-slate-900">
-                    리뷰
-                  </div>
-                  <div className="text-[12px] text-slate-400 mt-0.5">
-                    {reviews.length > 0
-                      ? `평균 ★${avgRating.toFixed(1)} · ${reviews.length}개`
-                      : '아직 리뷰가 없습니다'}
-                  </div>
-                </div>
-              </div>
-
-              {user ? (
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 mb-4">
-                  <div className="text-[13px] font-bold text-slate-700 mb-3">
-                    {myReview ? '내 리뷰 수정' : '리뷰 작성'}
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="text-[11px] font-bold text-slate-400 mb-2">
-                      별점
-                    </div>
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() =>
-                            setReviewForm((prev) => ({ ...prev, rating: n }))
-                          }
-                          className={`text-2xl ${
-                            n <= reviewForm.rating ? 'text-amber-400' : 'text-slate-300'
-                          }`}
-                        >
-                          ★
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="text-[11px] font-bold text-slate-400 mb-2">
-                      한 줄 리뷰
-                    </div>
-                    <textarea
-                      value={reviewForm.review_text}
-                      onChange={(e) =>
-                        setReviewForm((prev) => ({
-                          ...prev,
-                          review_text: e.target.value,
-                        }))
-                      }
-                      rows={3}
-                      maxLength={120}
-                      placeholder="예: 친절하고 빠르게 응대해줘요"
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:border-indigo-400 resize-none bg-white"
-                    />
-                  </div>
-
-                  <div className="mb-4">
-                    <div className="text-[11px] font-bold text-slate-400 mb-2">
-                      태그
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {REVIEW_TAGS.map((tag) => {
-                        const active = reviewForm.tags.includes(tag)
-                        return (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => toggleReviewTag(tag)}
-                            className={`px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-                              active
-                                ? 'bg-indigo-600 text-white border-indigo-600'
-                                : 'bg-white text-slate-500 border-slate-200'
-                            }`}
-                          >
-                            {tag}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={saveReview}
-                    disabled={reviewSaving}
-                    className="w-full bg-indigo-600 text-white rounded-lg py-2.5 text-[13px] font-bold disabled:opacity-50"
-                  >
-                    {reviewSaving
-                      ? '저장 중...'
-                      : myReview
-                        ? '리뷰 수정하기'
-                        : '리뷰 등록하기'}
-                  </button>
-                </div>
-              ) : (
-                <Link
-                  href="/auth/login"
-                  className="block bg-slate-50 rounded-xl border border-slate-200 p-4 mb-4 text-[13px] text-slate-600"
-                >
-                  리뷰 작성은 로그인 후 가능합니다.
-                </Link>
-              )}
-
-              {reviewLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : reviews.length === 0 ? (
-                <div className="text-[13px] text-slate-400 py-4">
-                  첫 리뷰를 남겨보세요.
-                </div>
-              ) : (
-                <div className="space-y-3 pb-2">
-                  {reviews.map((r) => (
-                    <div
-                      key={r.id}
-                      className="bg-white rounded-xl border border-slate-200 p-4"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-[13px] font-bold text-slate-800">
-                          {'★'.repeat(Number(r.rating || 0))}
-                          <span className="ml-2 text-slate-500">
-                            {Number(r.rating || 0).toFixed(1)}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          {new Date(r.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-
-                      {r.review_text && (
-                        <div className="text-[13px] text-slate-700 leading-relaxed mb-2">
-                          {r.review_text}
-                        </div>
-                      )}
-
-                      {r.tags?.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {r.tags.map((tag: string) => (
-                            <span
-                              key={tag}
-                              className="px-2 py-1 rounded-full bg-slate-100 text-slate-500 text-[11px] font-bold"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 px-5 pt-2">
-              {sel.phone && (
-                <a
-                  href={'tel:' + sel.phone}
-                  className="flex-1 bg-indigo-600 text-white py-3.5 rounded-xl text-[14px] font-bold text-center"
-                >
-                  📞 전화하기
-                </a>
-              )}
-
-              {sel.website && (
-                <a
-                  href={sel.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 bg-indigo-50 text-indigo-600 py-3.5 rounded-xl text-[14px] font-bold text-center"
-                >
-                  🌐 홈페이지
-                </a>
-              )}
-            </div>
-
-            <div className="px-5 pt-3">
-              <button
-                onClick={requestOwnerClaim}
-                disabled={claimLoading}
-                className="w-full bg-slate-100 text-slate-700 py-3 rounded-xl text-[13px] font-bold disabled:opacity-50"
-              >
-                {claimLoading ? '요청 중...' : '이 업소는 제 것입니다'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <HomeBusinessModal
+        sel={sel}
+        onClose={closeModal}
+        user={user}
+        reviews={reviews}
+        reviewLoading={reviewLoading}
+        reviewSaving={reviewSaving}
+        myReview={myReview}
+        reviewForm={reviewForm}
+        setReviewForm={setReviewForm}
+        relatedCommunityPosts={relatedCommunityPosts}
+        relatedPostsLoading={relatedPostsLoading}
+        claimLoading={claimLoading}
+        avgRating={avgRating}
+        onToggleReviewTag={toggleReviewTag}
+        onSaveReview={saveReview}
+        onRequestOwnerClaim={requestOwnerClaim}
+      />
     </div>
   )
 }
