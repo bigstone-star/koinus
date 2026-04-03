@@ -641,9 +641,9 @@ export default function Home() {
     ),
   }
 
-  return (
+    return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
-      <div className="bg-white border-b border-slate-200 px-3 py-3 sticky top-[56px] z-20">
+      <div className="bg-white border-b border-slate-200 px-3 py-3 sticky top-[60px] z-20">
         <div className="flex gap-2">
           <select
             value={region}
@@ -687,16 +687,16 @@ export default function Home() {
         </div>
       </div>
 
-      {enabledSectionKeys.map((section) => (
-        <div key={section.id} className={section.section_key === 'business_list' ? '' : 'px-3 pt-3'}>
+      {activeSections.map((section) => (
+        <div key={section.section_key}>
           {sectionMap[section.section_key]}
         </div>
       ))}
 
       <HomeBusinessModal
-  sel={sel}
-  onClose={closeModal}
-/>
+        sel={sel}
+        onClose={closeModal}
+      />
     </div>
   )
 }
