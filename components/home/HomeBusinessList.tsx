@@ -104,16 +104,13 @@ export default function HomeBusinessList({
               {addr && (
                 <div className="text-[12px] text-slate-500 truncate mt-0.5">
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      addr
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e: any) => e.stopPropagation()}
-                    className="inline underline"
-                  >
-                    {addr}
-                  </a>
+  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
+  target="_blank"
+  rel="noreferrer"
+  onClick={(e) => e.stopPropagation()}  // 🔥 추가
+>
+  {addr}
+</a>
                 </div>
               )}
 
