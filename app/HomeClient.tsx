@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import GlobalHeader from '@/components/GlobalHeader'
 
 const sb = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -79,7 +80,6 @@ type CommunityPreviewPost = {
   like_count?: number | null
   comment_count?: number | null
   created_at?: string | null
-  business_id?: string | null
 }
 
 export default function Home() {
@@ -366,6 +366,33 @@ export default function Home() {
     setCommunityPosts((data || []) as CommunityPreviewPost[])
   }, [region])
 
+  const loadRelatedCommunityPosts = useCallback(
+    async (businessId: string) => {
+      setRelatedPostsLoading(true)
+
+      const { data, error } = await sb
+        .from('community_posts')
+        .select('id, region, post_type, title, like_count, comment_count, created_at, business_id')
+        .eq('region', region)
+        .eq('is_active', true)
+        .eq('business_id', businessId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(4)
+
+      if (error) {
+        console.error('related community posts load error:', error)
+        setRelatedCommunityPosts([])
+        setRelatedPostsLoading(false)
+        return
+      }
+
+      setRelatedCommunityPosts((data || []) as CommunityPreviewPost[])
+      setRelatedPostsLoading(false)
+    },
+    [region]
+  )
+
   const load = useCallback(async () => {
     setLoading(true)
 
@@ -404,7 +431,7 @@ export default function Home() {
       q = q.order('name_en', { ascending: true })
     }
 
-    const { data, error } = await q.limit(60)
+    const { data, error } = await q.limit(24)
 
     if (error) {
       console.error('business load error:', error)
@@ -422,33 +449,6 @@ export default function Home() {
     loadCommunityPreview()
     load()
   }, [loadVipBusinesses, loadCommunityPreview, load])
-
-  const loadRelatedCommunityPosts = useCallback(
-    async (businessId: string) => {
-      setRelatedPostsLoading(true)
-
-      const { data, error } = await sb
-        .from('community_posts')
-        .select('id, region, post_type, title, like_count, comment_count, created_at, business_id')
-        .eq('region', region)
-        .eq('is_active', true)
-        .eq('business_id', businessId)
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(4)
-
-      if (error) {
-        console.error('related community posts load error:', error)
-        setRelatedCommunityPosts([])
-        setRelatedPostsLoading(false)
-        return
-      }
-
-      setRelatedCommunityPosts((data || []) as CommunityPreviewPost[])
-      setRelatedPostsLoading(false)
-    },
-    [region]
-  )
 
   const loadReviews = useCallback(
     async (businessId: string) => {
@@ -716,67 +716,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-100 max-w-lg mx-auto">
-      <header className="bg-[#1a1a2e] sticky top-0 z-40 shadow-xl">
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div>
-            {headerLogoUrl && !showTextLogo ? (
-              <img
-                src={headerLogoUrl}
-                alt={siteName}
-                className="h-8 w-auto"
-                style={{ maxWidth: `${headerLogoWidth}px` }}
-              />
-            ) : (
-              <h1 className="text-[20px] font-extrabold text-white">
-                {displaySiteName.startsWith('교차로 ') ? (
-                  <>
-                    <span className="text-amber-400">교차로</span>{' '}
-                    {displaySiteName.replace('교차로 ', '')}
-                  </>
-                ) : (
-                  displaySiteName
-                )}
-              </h1>
-            )}
+      <GlobalHeader />
 
-            <p className="text-[11px] text-white/40 mt-0.5">
-              {regionMeta.subtitle}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] font-bold text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full">
-              {totalCount}개
-            </span>
-
-            {user ? (
-              <>
-                <button
-                  onClick={signOut}
-                  className="text-[12px] font-bold text-white/70 bg-white/10 px-3 py-1.5 rounded-lg border border-white/15"
-                >
-                  로그아웃
-                </button>
-
-                <Link
-                  href="/dashboard"
-                  className="text-[12px] font-bold text-[#1a1a2e] bg-amber-400 px-3 py-1.5 rounded-lg"
-                >
-                  내정보
-                </Link>
-              </>
-            ) : (
-              <Link
-                href="/auth/login"
-                className="text-[12px] font-bold text-white/70 bg-white/10 px-3 py-1.5 rounded-lg border border-white/15"
-              >
-                로그인
-              </Link>
-            )}
-          </div>
-        </div>
-
-        <div className="px-4 pb-3 flex gap-2">
+      <div className="bg-white border-b border-slate-200 px-3 py-3 sticky top-0 z-20">
+        <div className="flex gap-2">
           <select
             value={region}
             onChange={(e) => {
@@ -784,35 +727,36 @@ export default function Home() {
               setRegion(nextRegion)
               setCat('전체')
             }}
-            className="bg-white/10 border border-white/15 rounded-lg px-3 text-[12px] font-bold text-white/80 h-10"
+            className="h-10 border border-slate-200 rounded-lg px-3 text-[12px] font-bold text-slate-700 bg-white whitespace-nowrap"
           >
             {REGIONS.map((r) => (
-              <option key={r.value} value={r.value} className="text-black">
+              <option key={r.value} value={r.value}>
                 {r.label}
               </option>
             ))}
           </select>
 
-          <div className="flex-1 bg-white/10 border border-white/15 rounded-lg flex items-center px-3 gap-2">
-            <span className="text-white/40">🔍</span>
+          <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
+            <span className="text-slate-300">🔍</span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="업소명, 한글명, 업종, 주소, 전화번호 검색..."
-              className="bg-transparent border-none outline-none text-white text-[14px] w-full py-2.5 placeholder:text-white/30"
+              className="w-full bg-transparent border-none outline-none text-[13px] text-slate-700 py-2.5 placeholder:text-slate-400"
             />
           </div>
 
-          <button
-            onClick={() =>
-              setSort((prev) => SORTS[(SORTS.indexOf(prev) + 1) % SORTS.length])
-            }
-            className="bg-white/10 border border-white/15 rounded-lg px-3 text-[12px] font-bold text-white/70 h-10"
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as 'rating' | 'review_count' | 'name_en')}
+            className="h-10 border border-slate-200 rounded-lg px-3 text-[12px] font-bold text-slate-700 bg-white whitespace-nowrap"
           >
-            {SORT_LABELS[sort]}
-          </button>
+            <option value="rating">평점순</option>
+            <option value="review_count">리뷰순</option>
+            <option value="name_en">이름순</option>
+          </select>
         </div>
-      </header>
+      </div>
 
       {currentTopBanner && (
         <div className="px-3 pt-3">{renderBanner(currentTopBanner)}</div>
@@ -820,58 +764,6 @@ export default function Home() {
 
       {cat === '전체' && (
         <div className="px-3 pt-3 space-y-3">
-          {vipBiz.length > 0 && (
-            <div className="bg-white rounded-xl border border-amber-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-[14px] font-extrabold text-slate-900">
-                    ⭐ {REGIONS.find((r) => r.value === region)?.label} 추천 업소
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    선택된 지역 VIP 업소를 먼저 보여드립니다
-                  </div>
-                </div>
-
-                <Link
-                  href="/pricing"
-                  className="text-[11px] font-bold text-amber-700"
-                >
-                  VIP 안내
-                </Link>
-              </div>
-
-              <div className="space-y-2">
-                {vipBiz.map((b) => (
-                  <button
-                    key={b.id}
-                    onClick={async () => {
-                      setSel(b)
-                      await loadReviews(b.id)
-                      await loadRelatedCommunityPosts(b.id)
-                    }}
-                    className="w-full text-left rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-[14px] font-bold text-slate-900 truncate">
-                          {b.name_kr || b.name_en}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-1 truncate">
-                          {b.category_main}
-                          {b.category_sub ? ` · ${b.category_sub}` : ''}
-                        </div>
-                      </div>
-
-                      <div className="text-[10px] font-black px-2 py-1 rounded bg-amber-300 text-amber-900 whitespace-nowrap">
-                        ⭐ {b.vip_tier?.toUpperCase() || 'VIP'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {communityPosts.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="flex items-center justify-between mb-3">
@@ -911,6 +803,58 @@ export default function Home() {
                       댓글 {p.comment_count || 0} · ❤️ {p.like_count || 0}
                     </div>
                   </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {vipBiz.length > 0 && (
+            <div className="bg-white rounded-xl border border-amber-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-[14px] font-extrabold text-slate-900">
+                    ⭐ {REGIONS.find((r) => r.value === region)?.label} 추천 업소
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    선택된 지역 VIP 업소를 먼저 보여드립니다
+                  </div>
+                </div>
+
+                <Link
+                  href="/pricing"
+                  className="text-[11px] font-bold text-amber-700 whitespace-nowrap"
+                >
+                  VIP 안내
+                </Link>
+              </div>
+
+              <div className="space-y-2">
+                {vipBiz.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={async () => {
+                      setSel(b)
+                      await loadReviews(b.id)
+                      await loadRelatedCommunityPosts(b.id)
+                    }}
+                    className="w-full text-left rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[14px] font-bold text-slate-900 truncate">
+                          {b.name_kr || b.name_en}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1 truncate">
+                          {b.category_main}
+                          {b.category_sub ? ` · ${b.category_sub}` : ''}
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] font-black px-2 py-1 rounded bg-amber-300 text-amber-900 whitespace-nowrap">
+                        ⭐ {b.vip_tier?.toUpperCase() || 'VIP'}
+                      </div>
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -1008,6 +952,7 @@ export default function Home() {
                   onClick={async () => {
                     setSel(b)
                     await loadReviews(b.id)
+                    await loadRelatedCommunityPosts(b.id)
                   }}
                   className={`bg-white rounded-xl border px-4 py-3.5 flex gap-3 cursor-pointer active:scale-[.99] transition-all ${
                     b.is_vip ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'
@@ -1279,7 +1224,9 @@ export default function Home() {
                   ))}
                 </div>
               )}
+            </div>
 
+            <div className="px-5 pt-4 border-t border-slate-100 mt-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="text-[16px] font-extrabold text-slate-900">
