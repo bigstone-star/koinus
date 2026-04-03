@@ -61,17 +61,21 @@ export default function CommunityRegionPage({
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [likedMap, setLikedMap] = useState<Record<string, boolean>>({})
+  const [reportedMap, setReportedMap] = useState<Record<string, boolean>>({})
   const [isAdmin, setIsAdmin] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
 
   useEffect(() => {
     init()
-  }, [region])
+  }, [region, showHidden])
 
   const init = async () => {
     setLoading(true)
 
     const { data: userData } = await sb.auth.getUser()
     setUser(userData.user || null)
+
+    let admin = false
 
     if (userData.user) {
       const { data: profileData } = await sb
@@ -83,6 +87,7 @@ export default function CommunityRegionPage({
       setProfile(profileData || null)
 
       if (profileData?.role === 'admin' || profileData?.role === 'super_admin') {
+        admin = true
         setIsAdmin(true)
       } else {
         setIsAdmin(false)
@@ -92,16 +97,23 @@ export default function CommunityRegionPage({
       setIsAdmin(false)
     }
 
-    await loadPosts(userData.user || null)
+    await loadPosts(userData.user || null, admin)
     setLoading(false)
   }
 
-  const loadPosts = async (currentUser?: any) => {
-    const { data, error } = await sb
+  const loadPosts = async (currentUser?: any, adminFlag?: boolean) => {
+    const admin = typeof adminFlag === 'boolean' ? adminFlag : isAdmin
+
+    let query = sb
       .from('community_posts')
       .select('*')
       .eq('region', region)
-      .eq('is_active', true)
+
+    if (!admin || !showHidden) {
+      query = query.eq('is_active', true)
+    }
+
+    const { data, error } = await query
       .order('is_pinned', { ascending: false })
       .order('like_count', { ascending: false })
       .order('created_at', { ascending: false })
@@ -115,23 +127,30 @@ export default function CommunityRegionPage({
     setPosts((data || []) as CommunityPost[])
 
     if (currentUser) {
-      const { data: likes, error: likeError } = await sb
+      const { data: likes } = await sb
         .from('community_likes')
         .select('post_id')
         .eq('user_id', currentUser.id)
 
-      if (likeError) {
-        console.error('community likes load error:', likeError)
-        setLikedMap({})
-      } else {
-        const map: Record<string, boolean> = {}
-        ;(likes || []).forEach((l: any) => {
-          if (l.post_id) map[l.post_id] = true
-        })
-        setLikedMap(map)
-      }
+      const likeMap: Record<string, boolean> = {}
+      ;(likes || []).forEach((l: any) => {
+        if (l.post_id) likeMap[l.post_id] = true
+      })
+      setLikedMap(likeMap)
+
+      const { data: reports } = await sb
+        .from('community_reports')
+        .select('post_id')
+        .eq('user_id', currentUser.id)
+
+      const reportMap: Record<string, boolean> = {}
+      ;(reports || []).forEach((r: any) => {
+        if (r.post_id) reportMap[r.post_id] = true
+      })
+      setReportedMap(reportMap)
     } else {
       setLikedMap({})
+      setReportedMap({})
     }
   }
 
@@ -157,8 +176,7 @@ export default function CommunityRegionPage({
         return
       }
 
-      const { error: rpcError } = await sb.rpc('decrement_like', { pid: postId })
-      if (rpcError) console.error('decrement_like error:', rpcError)
+      await sb.rpc('decrement_like', { pid: postId })
     } else {
       const { error: insertError } = await sb
         .from('community_likes')
@@ -172,11 +190,10 @@ export default function CommunityRegionPage({
         return
       }
 
-      const { error: rpcError } = await sb.rpc('increment_like', { pid: postId })
-      if (rpcError) console.error('increment_like error:', rpcError)
+      await sb.rpc('increment_like', { pid: postId })
     }
 
-    await loadPosts(user)
+    await loadPosts(user, isAdmin)
   }
 
   const hidePost = async (e: React.MouseEvent, postId: string) => {
@@ -195,8 +212,80 @@ export default function CommunityRegionPage({
       return
     }
 
-    await loadPosts(user)
+    await loadPosts(user, isAdmin)
     alert('글이 숨김 처리되었습니다.')
+  }
+
+  const restorePost = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation()
+
+    if (!isAdmin) return
+    if (!confirm('이 글을 복구하시겠습니까?')) return
+
+    const { error } = await sb
+      .from('community_posts')
+      .update({ is_active: true })
+      .eq('id', postId)
+
+    if (error) {
+      alert('복구 실패: ' + error.message)
+      return
+    }
+
+    await loadPosts(user, isAdmin)
+    alert('글이 복구되었습니다.')
+  }
+
+  const togglePinned = async (e: React.MouseEvent, postId: string, nextPinned: boolean) => {
+    e.stopPropagation()
+
+    if (!isAdmin) return
+
+    const { error } = await sb
+      .from('community_posts')
+      .update({ is_pinned: nextPinned })
+      .eq('id', postId)
+
+    if (error) {
+      alert('공지 설정 실패: ' + error.message)
+      return
+    }
+
+    await loadPosts(user, isAdmin)
+    alert(nextPinned ? '공지글로 고정되었습니다.' : '공지글 고정이 해제되었습니다.')
+  }
+
+  const reportPost = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation()
+
+    if (!user) {
+      alert('로그인이 필요합니다.')
+      return
+    }
+
+    if (reportedMap[postId]) {
+      alert('이미 신고한 글입니다.')
+      return
+    }
+
+    const reason = prompt('신고 사유를 입력하세요.\n예: 광고성, 욕설, 허위 정보')
+    if (!reason || !reason.trim()) return
+
+    const { error } = await sb
+      .from('community_reports')
+      .insert({
+        post_id: postId,
+        user_id: user.id,
+        reason: reason.trim(),
+      })
+
+    if (error) {
+      alert('신고 실패: ' + error.message)
+      return
+    }
+
+    setReportedMap((prev) => ({ ...prev, [postId]: true }))
+    alert('신고가 접수되었습니다.')
   }
 
   const goDetail = (postId: string) => {
@@ -283,6 +372,15 @@ export default function CommunityRegionPage({
             {label}
           </button>
         ))}
+
+        {isAdmin && (
+          <button
+            onClick={() => setShowHidden((prev) => !prev)}
+            className="px-3 py-1.5 rounded text-xs font-bold bg-red-50 text-red-600 border border-red-100"
+          >
+            {showHidden ? '숨김 숨기기' : '숨김 보기'}
+          </button>
+        )}
       </div>
 
       {filteredPosts.length === 0 ? (
@@ -300,6 +398,12 @@ export default function CommunityRegionPage({
               {p.is_pinned && (
                 <span className="bg-red-50 text-red-600 px-2 py-1 rounded-full font-bold">
                   공지
+                </span>
+              )}
+
+              {!p.is_active && (
+                <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">
+                  숨김됨
                 </span>
               )}
 
@@ -340,12 +444,43 @@ export default function CommunityRegionPage({
                 댓글 {p.comment_count || 0}
               </Link>
 
-              {isAdmin && (
+              {!isAdmin && (
+                <button
+                  onClick={(e) => reportPost(e, p.id)}
+                  className={`text-xs font-bold ${
+                    reportedMap[p.id] ? 'text-slate-400' : 'text-orange-500'
+                  }`}
+                >
+                  {reportedMap[p.id] ? '신고완료' : '신고'}
+                </button>
+              )}
+
+              {isAdmin && p.is_active !== false && (
                 <button
                   onClick={(e) => hidePost(e, p.id)}
                   className="text-xs text-red-500 font-bold"
                 >
                   숨김
+                </button>
+              )}
+
+              {isAdmin && p.is_active === false && (
+                <button
+                  onClick={(e) => restorePost(e, p.id)}
+                  className="text-xs text-green-600 font-bold"
+                >
+                  복구
+                </button>
+              )}
+
+              {isAdmin && (
+                <button
+                  onClick={(e) => togglePinned(e, p.id, !p.is_pinned)}
+                  className={`text-xs font-bold ${
+                    p.is_pinned ? 'text-indigo-600' : 'text-slate-500'
+                  }`}
+                >
+                  {p.is_pinned ? '공지해제' : '공지고정'}
                 </button>
               )}
             </div>
