@@ -818,28 +818,34 @@ export default function Home() {
                 <div className="space-y-2 mb-4">
                   {relatedCommunityPosts.map((p) => (
                     <Link
-                      key={p.id}
-                      href={`/community/${p.region}/${p.id}`}
-                      className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                          {p.post_type === 'question'
-                            ? '질문'
-                            : p.post_type === 'recommend'
-                              ? '추천'
-                              : p.post_type === 'news'
-                                ? '소식'
-                                : '일반'}
-                        </span>
-                      </div>
-                      <div className="text-[13px] font-bold text-slate-800">
-                        {p.title}
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        댓글 {p.comment_count || 0} · ❤️ {p.like_count || 0}
-                      </div>
-                    </Link>
+  key={p.id}
+  href={`/community/${p.region}/${p.id}`}
+  className="block px-3 py-2 rounded-lg border border-slate-100 hover:bg-slate-50"
+>
+  <div className="flex items-center justify-between gap-2">
+
+    {/* 왼쪽 */}
+    <div className="flex items-center gap-2 min-w-0">
+
+      {/* 카테고리 */}
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+        {postTypeLabel(p.post_type)}
+      </span>
+
+      {/* 제목 (한줄 제한) */}
+      <span className="text-[13px] font-bold text-slate-800 truncate">
+        {p.title}
+      </span>
+
+    </div>
+
+    {/* 오른쪽 */}
+    <div className="text-[11px] text-slate-400 shrink-0">
+      💬 {p.comment_count || 0} ❤️ {p.like_count || 0}
+    </div>
+
+  </div>
+</Link>
                   ))}
                 </div>
               )}
