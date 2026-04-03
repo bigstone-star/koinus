@@ -691,20 +691,6 @@ export default function Home() {
       <HomeBusinessModal
   sel={sel}
   onClose={closeModal}
-  user={user}
-  reviews={reviews}
-  reviewLoading={reviewLoading}
-  reviewSaving={reviewSaving}
-  myReview={myReview}
-  reviewForm={reviewForm}
-  setReviewForm={setReviewForm}
-  relatedCommunityPosts={relatedCommunityPosts}
-  relatedPostsLoading={relatedPostsLoading}
-  claimLoading={claimLoading}
-  avgRating={avgRating}
-  onToggleReviewTag={toggleReviewTag}
-  onSaveReview={saveReview}
-  onRequestOwnerClaim={requestOwnerClaim}
 />
     </div>
   )
