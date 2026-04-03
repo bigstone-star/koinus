@@ -54,18 +54,22 @@ export default function HomeCommunityLatest({
           <Link
             key={p.id}
             href={`/community/${p.region}/${p.id}`}
-            className="block rounded-lg border border-slate-100 px-3 py-3 hover:bg-slate-50"
+            className="block px-3 py-2 rounded-lg border border-slate-100 hover:bg-slate-50"
           >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                {postTypeLabel(p.post_type)}
-              </span>
-            </div>
-            <div className="text-[13px] font-bold text-slate-800 truncate">
-              {p.title}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              댓글 {p.comment_count || 0} · ❤️ {p.like_count || 0}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                  {postTypeLabel(p.post_type)}
+                </span>
+
+                <span className="text-[13px] font-bold text-slate-800 truncate">
+                  {p.title}
+                </span>
+              </div>
+
+              <div className="text-[11px] text-slate-400 shrink-0">
+                💬 {p.comment_count || 0} ❤️ {p.like_count || 0}
+              </div>
             </div>
           </Link>
         ))}
