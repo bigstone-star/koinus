@@ -17,7 +17,10 @@ export default function HomeCategoryGrid({
 }) {
   return (
     <div className="bg-white px-3 py-3">
-      <div className="grid grid-cols-5 gap-2">
+
+      {/* 👉 flex wrap 강제 */}
+      <div className="flex flex-wrap gap-2">
+
         {cats.map((c) => {
           const isActive = selected === c.name
 
@@ -28,8 +31,13 @@ export default function HomeCategoryGrid({
               className={`
                 flex flex-col items-center justify-center
                 rounded-xl border
-                h-[62px] px-1
-                text-center transition-all
+                h-[62px]
+                text-center
+                transition-all
+
+                /* 👉 핵심: 5개 고정 */
+                w-[18%]
+
                 ${isActive
                   ? 'bg-indigo-600 text-white border-indigo-600 shadow'
                   : 'bg-slate-50 text-slate-700 border-slate-200'}
@@ -45,6 +53,7 @@ export default function HomeCategoryGrid({
             </button>
           )
         })}
+
       </div>
     </div>
   )
