@@ -9,19 +9,28 @@ type Category = {
 export default function HomeCategoryGrid({
   cats,
   selected,
+  counts,
   onSelectCategory,
 }: {
   cats: Category[]
   selected: string
+  counts: Record<string, number>
   onSelectCategory: (name: string) => void
 }) {
+
+  // 👉 실제 데이터 있는 카테고리만 표시 (안전)
+  const visibleCats = cats.filter((c) => {
+    if (c.name === '전체') return true
+    return (counts?.[c.name] || 0) > 0
+  })
+
   return (
     <div className="bg-white px-3 py-3">
 
-      {/* 👉 flex wrap 강제 */}
-      <div className="flex flex-wrap gap-2">
+      {/* 🔥 핵심: grid 확실히 적용 */}
+      <div className="grid grid-cols-5 gap-2">
 
-        {cats.map((c) => {
+        {visibleCats.map((c) => {
           const isActive = selected === c.name
 
           return (
@@ -30,16 +39,13 @@ export default function HomeCategoryGrid({
               onClick={() => onSelectCategory(c.name)}
               className={`
                 flex flex-col items-center justify-center
-                rounded-xl border
-                h-[62px]
+                rounded-lg border
+                h-[60px]
                 text-center
                 transition-all
 
-                /* 👉 핵심: 5개 고정 */
-                w-[18%]
-
                 ${isActive
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow'
+                  ? 'bg-indigo-600 text-white border-indigo-600'
                   : 'bg-slate-50 text-slate-700 border-slate-200'}
               `}
             >
@@ -47,7 +53,7 @@ export default function HomeCategoryGrid({
                 {c.icon}
               </div>
 
-              <div className="text-[10px] font-bold mt-1 leading-tight break-keep">
+              <div className="text-[10px] font-bold mt-1 leading-tight px-1 break-keep">
                 {c.name}
               </div>
             </button>
