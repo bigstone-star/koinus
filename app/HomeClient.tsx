@@ -240,6 +240,7 @@ export default function Home() {
   const [favs, setFavs] = useState<string[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [user, setUser] = useState<any>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [cats, setCats] = useState<Category[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [region, setRegion] = useState('houston')
@@ -256,17 +257,55 @@ export default function Home() {
 
   const [claimLoading, setClaimLoading] = useState(false)
   const [relatedPostsLoading, setRelatedPostsLoading] = useState(false)
+  const [approvalSavingId, setApprovalSavingId] = useState<string | null>(null)
+
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
 
   useEffect(() => {
     try {
       setFavs(JSON.parse(localStorage.getItem('gj_favs') || '[]'))
     } catch {}
 
-    sb.auth.getUser().then(({ data }) => setUser(data.user))
+    const loadAuth = async () => {
+      const { data } = await sb.auth.getUser()
+      const currentUser = data.user ?? null
+      setUser(currentUser)
+
+      if (!currentUser) {
+        setUserRole(null)
+        return
+      }
+
+      const { data: profile } = await sb
+        .from('user_profiles')
+        .select('role')
+        .eq('id', currentUser.id)
+        .single()
+
+      setUserRole(profile?.role || null)
+    }
+
+    loadAuth()
 
     const {
       data: { subscription },
-    } = sb.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null))
+    } = sb.auth.onAuthStateChange(async (_, s) => {
+      const currentUser = s?.user ?? null
+      setUser(currentUser)
+
+      if (!currentUser) {
+        setUserRole(null)
+        return
+      }
+
+      const { data: profile } = await sb
+        .from('user_profiles')
+        .select('role')
+        .eq('id', currentUser.id)
+        .single()
+
+      setUserRole(profile?.role || null)
+    })
 
     sb.from('categories')
       .select('*')
@@ -370,11 +409,17 @@ export default function Home() {
   useEffect(() => {
     const loadCounts = async () => {
       try {
-        const { count: total, error: totalError } = await sb
+        let totalQuery = sb
           .from('businesses')
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true)
           .eq('metro_area', region)
+
+        if (!isAdmin) {
+          totalQuery = totalQuery.eq('approved', true)
+        }
+
+        const { count: total, error: totalError } = await totalQuery
 
         if (!totalError && total !== null) {
           setTotalCount(total)
@@ -393,12 +438,18 @@ export default function Home() {
 
         const results = await Promise.all(
           realCategories.map(async (category) => {
-            const { count, error } = await sb
+            let categoryQuery = sb
               .from('businesses')
               .select('id', { count: 'exact', head: true })
               .eq('is_active', true)
               .eq('metro_area', region)
               .eq('category_main', category.name)
+
+            if (!isAdmin) {
+              categoryQuery = categoryQuery.eq('approved', true)
+            }
+
+            const { count, error } = await categoryQuery
 
             return {
               name: category.name,
@@ -418,22 +469,26 @@ export default function Home() {
     }
 
     loadCounts()
-  }, [region, cats])
+  }, [region, cats, isAdmin])
 
   const loadVipBusinesses = useCallback(async () => {
     let q = sb
       .from('businesses')
       .select('*')
       .eq('is_active', true)
-      .eq('approved', true)
       .eq('metro_area', region)
       .eq('is_vip', true)
+
+    if (!isAdmin) {
+      q = q.eq('approved', true)
+    }
 
     if (cat !== '전체') {
       q = q.eq('category_main', cat)
     }
 
     const { data, error } = await q
+      .order('approved', { ascending: false })
       .order('rating', { ascending: false })
       .order('review_count', { ascending: false })
       .limit(6)
@@ -445,7 +500,7 @@ export default function Home() {
     }
 
     setVipBiz(data || [])
-  }, [region, cat])
+  }, [region, cat, isAdmin])
 
   const loadCommunityPreview = useCallback(async () => {
     const { data, error } = await sb
@@ -505,14 +560,16 @@ export default function Home() {
       .eq('is_active', true)
       .eq('metro_area', region)
 
-    // 검색어가 없을 때는 기존처럼 상위 노출 중심으로 적게 가져오고,
-    // 검색어가 있을 때는 더 넉넉히 가져온 뒤 클라이언트에서 점수 정렬합니다.
-    // 이전 300개 제한 때문에 bank 같은 검색이 실제 존재해도 빠지는 경우가 있었습니다.
+    if (!isAdmin) {
+      q = q.eq('approved', true)
+    }
+
     if (cat !== '전체') {
       q = q.eq('category_main', cat)
     }
 
     q = q
+      .order('approved', { ascending: false })
       .order('is_vip', { ascending: false })
       .order('rating', { ascending: false, nullsFirst: false })
       .order('review_count', { ascending: false, nullsFirst: false })
@@ -542,6 +599,10 @@ export default function Home() {
         .filter((item) => item.score > 0)
         .sort((a, b) => {
           if (b.score !== a.score) return b.score - a.score
+
+          const aApproved = a.business?.approved ? 1 : 0
+          const bApproved = b.business?.approved ? 1 : 0
+          if (bApproved !== aApproved) return bApproved - aApproved
 
           const aVip = a.business?.is_vip ? 1 : 0
           const bVip = b.business?.is_vip ? 1 : 0
@@ -576,11 +637,14 @@ export default function Home() {
         .map((item) => item.business)
     } else {
       filtered = applyBusinessSort(filtered, sort)
+      if (isAdmin) {
+        filtered = [...filtered].sort((a, b) => Number(b?.approved ? 1 : 0) - Number(a?.approved ? 1 : 0))
+      }
     }
 
     setBiz(filtered.slice(0, 20))
     setLoading(false)
-  }, [cat, search, sort, region])
+  }, [cat, search, sort, region, isAdmin])
 
   useEffect(() => {
     if (!hasInitializedFromUrl.current) return
@@ -761,6 +825,59 @@ export default function Home() {
     })
   }
 
+  const toggleApprovedFromHome = async (business: any, e?: any) => {
+    e?.stopPropagation?.()
+
+    if (!isAdmin || !business?.id || approvalSavingId) return
+
+    const nextApproved = !business.approved
+    const confirmMessage = nextApproved
+      ? '이 업소를 승인하시겠습니까?'
+      : '승인을 취소하면 일반 사용자 홈에서는 바로 사라집니다. 계속할까요?'
+
+    if (!window.confirm(confirmMessage)) return
+
+    setApprovalSavingId(business.id)
+
+    try {
+      const { error } = await sb
+        .from('businesses')
+        .update({ approved: nextApproved })
+        .eq('id', business.id)
+
+      if (error) throw error
+
+      setBiz((prev) => {
+        const updated = prev.map((item) =>
+          item.id === business.id ? { ...item, approved: nextApproved } : item
+        )
+
+        return isAdmin ? updated : updated.filter((item) => item.approved)
+      })
+
+      setVipBiz((prev) =>
+        prev.map((item) =>
+          item.id === business.id ? { ...item, approved: nextApproved } : item
+        )
+      )
+
+      if (sel?.id === business.id) {
+        setSel((prev: any) => (prev ? { ...prev, approved: nextApproved } : prev))
+      }
+
+      setCounts((prev) => ({
+        ...prev,
+      }))
+
+      load()
+      loadVipBusinesses()
+    } catch (error: any) {
+      alert('승인 상태 변경 실패: ' + (error?.message || '알 수 없는 오류'))
+    } finally {
+      setApprovalSavingId(null)
+    }
+  }
+
   const closeModal = () => {
     setSel(null)
     setReviews([])
@@ -785,14 +902,6 @@ export default function Home() {
     loadReviews(b.id)
     loadRelatedCommunityPosts(b.id)
   }
-
-  const activeSections = useMemo(
-    () =>
-      sections
-        .filter((s) => s.is_enabled !== false)
-        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)),
-    [sections]
-  )
 
   const sectionMap: Record<string, React.ReactNode> = {
     community_latest: (
@@ -826,6 +935,9 @@ export default function Home() {
             favs={favs}
             onToggleFav={toggleFav}
             onOpenBusiness={openBusiness}
+            isAdmin={isAdmin}
+            approvalSavingId={approvalSavingId}
+            onToggleApproved={toggleApprovedFromHome}
           />
         )}
       </div>
@@ -877,8 +989,13 @@ export default function Home() {
           </select>
         </div>
 
-        <div className="text-[11px] text-slate-400 mt-2">
-          총 {totalCount}개 업소
+        <div className="text-[11px] text-slate-400 mt-2 flex items-center justify-between gap-2">
+          <span>총 {totalCount}개 업소</span>
+          {isAdmin && (
+            <span className="text-[11px] font-bold text-indigo-600">
+              관리자 보기: 미승인 업소도 표시됩니다.
+            </span>
+          )}
         </div>
       </div>
 
