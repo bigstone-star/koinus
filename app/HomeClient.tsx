@@ -340,54 +340,67 @@ export default function Home() {
   )
 
   const load = useCallback(async () => {
-    setLoading(true)
+  setLoading(true)
 
-    let q = sb
-      .from('businesses')
-      .select('*')
-      .eq('is_active', true)
-      .eq('metro_area', region)
+  let q = sb
+    .from('businesses')
+    .select('*')
+    .eq('is_active', true)
+    .eq('metro_area', region)
 
-    if (cat !== '전체') q = q.eq('category_main', cat)
+  if (cat !== '전체') {
+    q = q.eq('category_main', cat)
+  }
 
-    const normalizedSearch = search.replace(/\s+/g, ' ').trim()
+  q = q
+    .order('is_vip', { ascending: false })
+    .order('rating', { ascending: false, nullsFirst: false })
+    .order('review_count', { ascending: false, nullsFirst: false })
 
-    if (normalizedSearch) {
-      q = q.or(
-        [
-          `name_en.ilike.%${normalizedSearch}%`,
-          `name_kr.ilike.%${normalizedSearch}%`,
-          `category_main.ilike.%${normalizedSearch}%`,
-          `category_sub.ilike.%${normalizedSearch}%`,
-          `address.ilike.%${normalizedSearch}%`,
-          `phone.ilike.%${normalizedSearch}%`,
-          `city.ilike.%${normalizedSearch}%`,
-        ].join(',')
-      )
-    }
+  if (sort === 'name_en') {
+    q = q.order('name_en', { ascending: true })
+  }
 
-    q = q
-      .order('is_vip', { ascending: true })
-      .order('rating', { ascending: false, nullsFirst: false })
-      .order('review_count', { ascending: false, nullsFirst: false })
+  const { data, error } = await q.limit(300)
 
-    if (sort === 'name_en') {
-      q = q.order('name_en', { ascending: true })
-    } else {
-      q = q.order(sort, { ascending: false, nullsFirst: false })
-    }
-
-    const { data, error } = await q.limit(20)
-
-    if (error) {
-      console.error('business load error:', error)
-      setBiz([])
-    } else {
-      setBiz(data || [])
-    }
-
+  if (error) {
+    console.error('business load error:', error)
+    setBiz([])
     setLoading(false)
-  }, [cat, search, sort, region])
+    return
+  }
+
+  let nextBiz = data || []
+
+  const normalizedSearch = search.replace(/\s+/g, ' ').trim()
+
+  if (normalizedSearch) {
+    const terms = normalizedSearch
+      .split(' ')
+      .map((term) => term.trim().toLowerCase())
+      .filter(Boolean)
+
+    nextBiz = nextBiz.filter((b) => {
+      const haystack = [
+        b.name_kr,
+        b.name_en,
+        b.category_main,
+        b.category_sub,
+        b.address,
+        b.city,
+        b.phone,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return terms.every((term) => haystack.includes(term))
+    })
+  }
+
+  setBiz(nextBiz.slice(0, 20))
+  setLoading(false)
+}, [cat, search, sort, region])
 
   useEffect(() => {
     if (!hasInitializedFromUrl.current) return
