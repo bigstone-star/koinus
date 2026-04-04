@@ -352,36 +352,19 @@ export default function Home() {
 
     const normalizedSearch = search.replace(/\s+/g, ' ').trim()
 
-const { data } = await q.limit(300)
-
-let nextBiz = data || []
-
-if (normalizedSearch) {
-  const terms = normalizedSearch
-    .split(' ')
-    .map((term) => term.trim().toLowerCase())
-    .filter(Boolean)
-
-  nextBiz = nextBiz.filter((b) => {
-    const haystack = [
-      b.name_kr,
-      b.name_en,
-      b.category_main,
-      b.category_sub,
-      b.address,
-      b.city,
-      b.phone,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-
-    return terms.every((term) => haystack.includes(term))
-  })
-}
-
-setBiz(nextBiz)
-setLoading(false)
+    if (normalizedSearch) {
+      q = q.or(
+        [
+          `name_en.ilike.%${normalizedSearch}%`,
+          `name_kr.ilike.%${normalizedSearch}%`,
+          `category_main.ilike.%${normalizedSearch}%`,
+          `category_sub.ilike.%${normalizedSearch}%`,
+          `address.ilike.%${normalizedSearch}%`,
+          `phone.ilike.%${normalizedSearch}%`,
+          `city.ilike.%${normalizedSearch}%`,
+        ].join(',')
+      )
+    }
 
     q = q
       .order('is_vip', { ascending: true })
