@@ -53,6 +53,83 @@ type BusinessRow = {
   data_source?: string | null
 }
 
+
+function normalizeSearchText(value?: string | null) {
+  return (value || '')
+    .toString()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizeCompactSearchText(value?: string | null) {
+  return normalizeSearchText(value).replace(/[\s\-_,./()]+/g, '')
+}
+
+function tokenizeSearchQuery(value?: string) {
+  const normalized = normalizeSearchText(value)
+
+  if (!normalized) return []
+
+  return Array.from(
+    new Set(
+      normalized
+        .split(' ')
+        .map((token) => token.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function getBusinessSearchValues(row: BusinessRow) {
+  const values = [
+    row.name_kr,
+    row.name_en,
+    row.category_main,
+    row.category_sub,
+    row.address,
+    row.city,
+    row.phone,
+    row.metro_area,
+  ]
+
+  const joined = normalizeSearchText(values.filter(Boolean).join(' '))
+  const compact = normalizeCompactSearchText(values.filter(Boolean).join(' '))
+
+  return { joined, compact }
+}
+
+function businessMatchesSearch(row: BusinessRow, rawQuery?: string) {
+  const normalizedQuery = normalizeSearchText(rawQuery)
+  if (!normalizedQuery) return true
+
+  const tokens = tokenizeSearchQuery(rawQuery)
+  const compactQuery = normalizeCompactSearchText(rawQuery)
+  const { joined, compact } = getBusinessSearchValues(row)
+
+  if (!joined) return false
+
+  if (joined.includes(normalizedQuery) || (compactQuery && compact.includes(compactQuery))) {
+    return true
+  }
+
+  if (tokens.length === 0) return true
+
+  let matched = 0
+
+  for (const token of tokens) {
+    const compactToken = normalizeCompactSearchText(token)
+    if (!compactToken) continue
+
+    if (joined.includes(token) || compact.includes(compactToken)) {
+      matched += 1
+    }
+  }
+
+  const minimumMatches = tokens.length >= 3 ? 2 : 1
+  return matched >= minimumMatches
+}
+
 function normalizeCityFromAddress(address?: string | null) {
   if (!address) return ''
   const m = address.match(/,\s*([^,]+),\s*TX\b/i)
@@ -270,10 +347,9 @@ export default function AdminBusinessesPage() {
         })
       )
     } catch {}
-  }, [tab, search, ok])
+  }, [tab, search, region, ok])
 
-  const loadList = useCallback(
-  async (
+  const loadList = useCallback(async (
     searchTerm?: string,
     tabOverride?: 'pending' | 'vip' | 'all' | 'categories' | 'trash',
     regionOverride?: string
@@ -288,6 +364,9 @@ export default function AdminBusinessesPage() {
     setLoading(true)
     setSelected(new Set())
 
+    const currentRegion = regionOverride ?? region
+    const term = searchTerm !== undefined ? searchTerm : search
+
     let q =
       currentTab === 'trash'
         ? sb.from('businesses').select('*').eq('is_active', false)
@@ -295,15 +374,11 @@ export default function AdminBusinessesPage() {
 
     if (currentTab === 'pending') q = q.eq('data_source', 'user_registered')
     if (currentTab === 'vip') q = q.eq('is_vip', true)
-
-    const currentRegion = regionOverride ?? region
-    if (currentRegion !== 'all') {
-      q = q.eq('metro_area', currentRegion)
-    }
+    if (currentRegion !== 'all') q = q.eq('metro_area', currentRegion)
 
     const { data, error } = await q
       .order('created_at', { ascending: false })
-      .limit(500)
+      .limit(1000)
 
     if (error) {
       setErrorMsg('업소 목록을 불러오지 못했습니다.')
@@ -312,39 +387,45 @@ export default function AdminBusinessesPage() {
       return
     }
 
-    let nextList = (data || []) as BusinessRow[]
+    const rows = ((data || []) as BusinessRow[]).filter((row) =>
+      businessMatchesSearch(row, term)
+    )
 
-    const term = (searchTerm !== undefined ? searchTerm : search)
-      .toLowerCase()
-      .trim()
-
-    if (term) {
-      const terms = term.split(' ').filter(Boolean)
-
-      nextList = nextList.filter((b) => {
-        const text = [
-          b.name_kr,
-          b.name_en,
-          b.category_main,
-          b.category_sub,
-          b.address,
-          b.city,
-          b.phone,
-          b.metro_area,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-
-        return terms.some((t) => text.includes(t))
-      })
-    }
-
-    setList(nextList)
+    setList(rows)
     setLoading(false)
-  },
-  [tab, search, region]
-)
+  }, [tab, search, region])
+
+  async function loadStats() {
+    try {
+      const [t, v, pd] = await Promise.all([
+        sb.from('businesses').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        sb.from('businesses').select('id', { count: 'exact', head: true }).eq('is_vip', true),
+        sb.from('businesses').select('id', { count: 'exact', head: true }).eq('data_source', 'user_registered').eq('is_active', true),
+      ])
+
+      setStats({
+        total: t.count || 0,
+        vip: v.count || 0,
+        pending: pd.count || 0,
+      })
+    } catch {
+      setErrorMsg('통계를 불러오는 중 오류가 발생했습니다.')
+    }
+  }
+
+  async function load() {
+    try {
+      setLoading(true)
+      await loadStats()
+      await loadList()
+    } catch {
+      setErrorMsg('통계를 불러오는 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadCats() {
     try {
       setCatLoading(true)
 
