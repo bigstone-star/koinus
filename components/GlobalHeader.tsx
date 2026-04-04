@@ -99,11 +99,15 @@ export default function GlobalHeader() {
   }
 
   const signOut = async () => {
-    await sb.auth.signOut()
-    setMenuOpen(false)
-    router.push('/')
-    router.refresh()
-  }
+  await sb.auth.signOut()
+
+  setUser(null)
+  setProfile(null)
+  setMenuOpen(false)
+
+  router.push('/')
+  router.refresh()
+}
 
   const isCommunity = pathname?.startsWith('/community')
   const isDirectory =
