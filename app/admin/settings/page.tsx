@@ -81,8 +81,10 @@ export default function AdminSettingsPage() {
       const fileName = `logo-${Date.now()}.${ext}`
 
       const { error: uploadError } = await sb.storage
-  .from('assets')
-  .upload(fileName, file)
+        .from('assets')
+        .upload(fileName, file, {
+          upsert: true,
+          contentType: file.type || 'image/png',
         })
 
       if (uploadError) {
