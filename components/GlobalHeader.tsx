@@ -187,21 +187,34 @@ export default function GlobalHeader() {
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <div className="text-[13px] font-bold text-slate-800 truncate">
-                    {displayName}
-                  </div>
-                </div>
+  <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+    <div className="px-4 py-3 border-b border-slate-100">
+      <div className="text-[13px] font-bold text-slate-800 truncate">
+        {displayName}
+      </div>
+      {user?.email && (
+        <div className="text-[11px] text-slate-400 truncate mt-1">
+          {user.email}
+        </div>
+      )}
+    </div>
 
-                <button
-                  onClick={signOut}
-                  className="w-full text-left px-4 py-3 text-[13px] font-medium text-red-500 hover:bg-red-50"
-                >
-                  로그아웃
-                </button>
-              </div>
-            )}
+    <Link
+      href="/dashboard"
+      onClick={() => setMenuOpen(false)}
+      className="block px-4 py-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+    >
+      내 정보 보기
+    </Link>
+
+    <button
+      onClick={signOut}
+      className="w-full text-left px-4 py-3 text-[13px] font-medium text-red-500 hover:bg-red-50"
+    >
+      로그아웃
+    </button>
+  </div>
+)}
           </>
         ) : (
           <Link
