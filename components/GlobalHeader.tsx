@@ -129,7 +129,15 @@ export default function GlobalHeader() {
       <div className="flex items-center gap-2 min-w-0">
 
         {/* ✅ 로고 부분 */}
-        <Link href="/" className="flex items-center shrink-0">
+        <Link href="/" className="flex items-center shrink-0 h-[40px]">
+  {logoUrl && (
+    <img
+      src={logoUrl}
+      alt="logo"
+      className="h-[26px] max-h-[26px] w-auto object-contain"
+    />
+  )}
+</Link>
          {logoUrl && (
   <img
     src={logoUrl}
