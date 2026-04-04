@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import GlobalHeader from '@/components/GlobalHeader'
+import ThemeLoader from '@/components/ThemeLoader'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://kyocharo-houston.vercel.app'),
@@ -16,17 +17,15 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
+        <ThemeLoader />
 
-        {/* 🔥 고정 헤더 */}
         <div className="fixed top-0 left-0 right-0 z-50">
           <GlobalHeader />
         </div>
 
-        {/* 🔥 헤더 높이 만큼 밀어줌 */}
         <div className="pt-[56px]">
           {children}
         </div>
-
       </body>
     </html>
   )
