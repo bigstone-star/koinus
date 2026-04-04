@@ -781,12 +781,29 @@ export default function AdminBusinessesPage() {
     loadStats()
   }
 
-  const approve = async (b: BusinessRow) => {
-    const metro = inferMetroArea(b.city, b.address)
-    const payload: Record<string, any> = { approved: true }
-    if (metro) payload.metro_area = metro
+  const toggleApproved = async (b: BusinessRow) => {
+    const nextApproved = !b.approved
+    const actionLabel = nextApproved ? '승인' : '승인 취소'
 
-    await sb.from('businesses').update(payload).eq('id', b.id)
+    if (!confirm(`${actionLabel} 처리할까요?`)) return
+
+    const payload: Record<string, any> = { approved: nextApproved }
+
+    if (nextApproved) {
+      const metro = inferMetroArea(b.city, b.address)
+      if (metro) payload.metro_area = metro
+    }
+
+    const { error } = await sb
+      .from('businesses')
+      .update(payload)
+      .eq('id', b.id)
+
+    if (error) {
+      alert(`${actionLabel} 실패: ${error.message}`)
+      return
+    }
+
     loadList()
     loadStats()
   }
@@ -1400,14 +1417,14 @@ const hardDeleteBusiness = async (id: string) => {
                       <div className="flex gap-2 flex-wrap">
   {tab !== 'trash' ? (
     <>
-      {!b.approved && (
-        <button
-          onClick={() => approve(b)}
-          className="bg-green-500 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg"
-        >
-          ✅ 승인
-        </button>
-      )}
+      <button
+        onClick={() => toggleApproved(b)}
+        className={`text-[11px] font-bold py-1.5 px-3 rounded-lg ${
+          b.approved ? 'bg-emerald-50 text-emerald-700' : 'bg-green-500 text-white'
+        }`}
+      >
+        {b.approved ? '승인 취소' : '✅ 승인'}
+      </button>
 
       <a
         href={`/admin/businesses/${b.id}`}
