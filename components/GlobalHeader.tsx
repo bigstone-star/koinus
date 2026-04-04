@@ -134,7 +134,7 @@ export default function GlobalHeader() {
   <img
     src={logoUrl}
     alt="logo"
-    className="h-[26px] w-auto object-contain"
+    className="h-[24px] max-h-[26px] w-auto object-contain shrink-0"
   />
 )}
         </Link>
