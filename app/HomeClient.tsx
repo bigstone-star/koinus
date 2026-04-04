@@ -1,7 +1,6 @@
-'use client'
+use client
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import HomeCommunityLatest from '@/components/home/HomeCommunityLatest'
@@ -278,42 +277,9 @@ export default function Home() {
       .single()
 
     setUserRole(profile?.role || null)
-  }, [loadAuthUser, router])
-
-  useEffect(() => {
-    try {
-      setFavs(JSON.parse(localStorage.getItem('gj_favs') || '[]'))
-    } catch {}
-
-    loadAuthUser()
-
-    const {
-      data: { subscription },
-    } = sb.auth.onAuthStateChange(async () => {
-      await loadAuthUser()
-      router.refresh()
-    })
-
-    sb.from('categories')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .then(({ data }) => {
-        const allCat: Category = {
-          id: 'all',
-          name: '전체',
-          icon: '🏠',
-          sort_order: 0,
-        }
-        setCats([allCat, ...(data || [])])
-      })
-
-    loadSections()
-
-    return () => subscription.unsubscribe()
   }, [])
 
-  const loadSections = async () => {
+  const loadSections = useCallback(async () => {
     const { data, error } = await sb
       .from('home_sections')
       .select('*')
@@ -331,132 +297,7 @@ export default function Home() {
     }
 
     setSections(data as HomeSection[])
-  }
-
-  useEffect(() => {
-    if (hasInitializedFromUrl.current) return
-
-    const urlRegion = searchParams.get('region')
-    const urlSearch = searchParams.get('search')
-    const urlCat = searchParams.get('cat')
-    const urlSort = searchParams.get('sort')
-
-    if (urlRegion) {
-      setRegion(urlRegion)
-    } else {
-      try {
-        const savedRegion = localStorage.getItem('gj_region')
-        if (savedRegion) setRegion(savedRegion)
-      } catch {}
-    }
-
-    if (urlSearch) setSearch(urlSearch)
-    if (urlCat) setCat(urlCat)
-    if (
-      urlSort === 'rating' ||
-      urlSort === 'review_count' ||
-      urlSort === 'name_en'
-    ) {
-      setSort(urlSort)
-    }
-
-    hasInitializedFromUrl.current = true
-  }, [searchParams])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('gj_region', region)
-      window.dispatchEvent(
-        new CustomEvent('gj_region_changed', { detail: region })
-      )
-    } catch {}
-  }, [region])
-
-  useEffect(() => {
-    if (!hasInitializedFromUrl.current) return
-
-    const params = new URLSearchParams()
-
-    if (region) params.set('region', region)
-    if (search.trim()) params.set('search', search.trim())
-    if (cat && cat !== '전체') params.set('cat', cat)
-    if (sort && sort !== 'rating') params.set('sort', sort)
-
-    const qs = params.toString()
-    const nextUrl = qs ? `/?${qs}` : '/'
-
-    if (!hasWrittenUrl.current) {
-      hasWrittenUrl.current = true
-      return
-    }
-
-    router.replace(nextUrl, { scroll: false })
-  }, [region, search, cat, sort, router])
-
-  useEffect(() => {
-    const loadCounts = async () => {
-      try {
-        let totalQuery = sb
-          .from('businesses')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .eq('metro_area', region)
-
-        if (!isAdmin) {
-          totalQuery = totalQuery.eq('approved', true)
-        }
-
-        const { count: total, error: totalError } = await totalQuery
-
-        if (!totalError && total !== null) {
-          setTotalCount(total)
-        }
-
-        if (!cats || cats.length === 0) {
-          setCounts({ 전체: total || 0 })
-          return
-        }
-
-        const nextCounts: Record<string, number> = {
-          전체: total || 0,
-        }
-
-        const realCategories = cats.filter((c) => c.name !== '전체')
-
-        const results = await Promise.all(
-          realCategories.map(async (category) => {
-            let categoryQuery = sb
-              .from('businesses')
-              .select('id', { count: 'exact', head: true })
-              .eq('is_active', true)
-              .eq('metro_area', region)
-              .eq('category_main', category.name)
-
-            if (!isAdmin) {
-              categoryQuery = categoryQuery.eq('approved', true)
-            }
-
-            const { count, error } = await categoryQuery
-
-            return {
-              name: category.name,
-              count: !error && count !== null ? count : 0,
-            }
-          })
-        )
-
-        results.forEach((item) => {
-          nextCounts[item.name] = item.count
-        })
-
-        setCounts(nextCounts)
-      } catch (e) {
-        console.error('loadCounts error:', e)
-      }
-    }
-
-    loadCounts()
-  }, [region, cats, isAdmin])
+  }, [])
 
   const loadVipBusinesses = useCallback(async () => {
     let q = sb
@@ -625,20 +466,15 @@ export default function Home() {
     } else {
       filtered = applyBusinessSort(filtered, sort)
       if (isAdmin) {
-        filtered = [...filtered].sort((a, b) => Number(b?.approved ? 1 : 0) - Number(a?.approved ? 1 : 0))
+        filtered = [...filtered].sort(
+          (a, b) => Number(b?.approved ? 1 : 0) - Number(a?.approved ? 1 : 0)
+        )
       }
     }
 
     setBiz(filtered.slice(0, 20))
     setLoading(false)
   }, [cat, search, sort, region, isAdmin])
-
-  useEffect(() => {
-    if (!hasInitializedFromUrl.current) return
-    loadCommunityPreview()
-    loadVipBusinesses()
-    load()
-  }, [loadCommunityPreview, loadVipBusinesses, load])
 
   const loadReviews = useCallback(
     async (businessId: string) => {
@@ -692,6 +528,218 @@ export default function Home() {
     },
     [user]
   )
+
+  const toggleApprovedFromHome = useCallback(async (business: any, e?: any) => {
+    e?.stopPropagation?.()
+
+    if (!isAdmin || !business?.id || approvalSavingId) return
+
+    const nextApproved = !business.approved
+    const confirmMessage = nextApproved
+      ? '이 업소를 승인하시겠습니까?'
+      : '승인을 취소하면 일반 사용자 홈에서는 바로 사라집니다. 계속할까요?'
+
+    if (!window.confirm(confirmMessage)) return
+
+    setApprovalSavingId(business.id)
+
+    try {
+      const { error } = await sb
+        .from('businesses')
+        .update({ approved: nextApproved })
+        .eq('id', business.id)
+
+      if (error) throw error
+
+      setBiz((prev) => {
+        const updated = prev.map((item) =>
+          item.id === business.id ? { ...item, approved: nextApproved } : item
+        )
+
+        return isAdmin ? updated : updated.filter((item) => item.approved)
+      })
+
+      setVipBiz((prev) =>
+        prev.map((item) =>
+          item.id === business.id ? { ...item, approved: nextApproved } : item
+        )
+      )
+
+      if (sel?.id === business.id) {
+        setSel((prev: any) => (prev ? { ...prev, approved: nextApproved } : prev))
+      }
+
+      await Promise.all([load(), loadVipBusinesses()])
+    } catch (error: any) {
+      alert('승인 상태 변경 실패: ' + (error?.message || '알 수 없는 오류'))
+    } finally {
+      setApprovalSavingId(null)
+    }
+  }, [isAdmin, approvalSavingId, sel?.id, load, loadVipBusinesses])
+
+  useEffect(() => {
+    try {
+      setFavs(JSON.parse(localStorage.getItem('gj_favs') || '[]'))
+    } catch {}
+
+    loadAuthUser()
+
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange(async () => {
+      await loadAuthUser()
+    })
+
+    sb.from('categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => {
+        const allCat: Category = {
+          id: 'all',
+          name: '전체',
+          icon: '🏠',
+          sort_order: 0,
+        }
+        setCats([allCat, ...(data || [])])
+      })
+
+    loadSections()
+
+    return () => subscription.unsubscribe()
+  }, [loadAuthUser, loadSections])
+
+  useEffect(() => {
+    if (hasInitializedFromUrl.current) return
+
+    const urlRegion = searchParams.get('region')
+    const urlSearch = searchParams.get('search')
+    const urlCat = searchParams.get('cat')
+    const urlSort = searchParams.get('sort')
+
+    if (urlRegion) {
+      setRegion(urlRegion)
+    } else {
+      try {
+        const savedRegion = localStorage.getItem('gj_region')
+        if (savedRegion) setRegion(savedRegion)
+      } catch {}
+    }
+
+    if (urlSearch) setSearch(urlSearch)
+    if (urlCat) setCat(urlCat)
+    if (
+      urlSort === 'rating' ||
+      urlSort === 'review_count' ||
+      urlSort === 'name_en'
+    ) {
+      setSort(urlSort)
+    }
+
+    hasInitializedFromUrl.current = true
+  }, [searchParams])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('gj_region', region)
+      window.dispatchEvent(
+        new CustomEvent('gj_region_changed', { detail: region })
+      )
+    } catch {}
+  }, [region])
+
+  useEffect(() => {
+    if (!hasInitializedFromUrl.current) return
+
+    const params = new URLSearchParams()
+
+    if (region) params.set('region', region)
+    if (search.trim()) params.set('search', search.trim())
+    if (cat && cat !== '전체') params.set('cat', cat)
+    if (sort && sort !== 'rating') params.set('sort', sort)
+
+    const qs = params.toString()
+    const nextUrl = qs ? `/?${qs}` : '/'
+
+    if (!hasWrittenUrl.current) {
+      hasWrittenUrl.current = true
+      return
+    }
+
+    router.replace(nextUrl, { scroll: false })
+  }, [region, search, cat, sort, router])
+
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        let totalQuery = sb
+          .from('businesses')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .eq('metro_area', region)
+
+        if (!isAdmin) {
+          totalQuery = totalQuery.eq('approved', true)
+        }
+
+        const { count: total, error: totalError } = await totalQuery
+
+        if (!totalError && total !== null) {
+          setTotalCount(total)
+        }
+
+        if (!cats || cats.length === 0) {
+          setCounts({ 전체: total || 0 })
+          return
+        }
+
+        const nextCounts: Record<string, number> = {
+          전체: total || 0,
+        }
+
+        const realCategories = cats.filter((c) => c.name !== '전체')
+
+        const results = await Promise.all(
+          realCategories.map(async (category) => {
+            let categoryQuery = sb
+              .from('businesses')
+              .select('id', { count: 'exact', head: true })
+              .eq('is_active', true)
+              .eq('metro_area', region)
+              .eq('category_main', category.name)
+
+            if (!isAdmin) {
+              categoryQuery = categoryQuery.eq('approved', true)
+            }
+
+            const { count, error } = await categoryQuery
+
+            return {
+              name: category.name,
+              count: !error && count !== null ? count : 0,
+            }
+          })
+        )
+
+        results.forEach((item) => {
+          nextCounts[item.name] = item.count
+        })
+
+        setCounts(nextCounts)
+      } catch (e) {
+        console.error('loadCounts error:', e)
+      }
+    }
+
+    loadCounts()
+  }, [region, cats, isAdmin])
+
+  useEffect(() => {
+    if (!hasInitializedFromUrl.current) return
+    loadCommunityPreview()
+    loadVipBusinesses()
+    load()
+  }, [loadCommunityPreview, loadVipBusinesses, load])
 
   const toggleReviewTag = (tag: string) => {
     setReviewForm((prev) => {
@@ -812,59 +860,6 @@ export default function Home() {
     })
   }
 
-  const toggleApprovedFromHome = async (business: any, e?: any) => {
-    e?.stopPropagation?.()
-
-    if (!isAdmin || !business?.id || approvalSavingId) return
-
-    const nextApproved = !business.approved
-    const confirmMessage = nextApproved
-      ? '이 업소를 승인하시겠습니까?'
-      : '승인을 취소하면 일반 사용자 홈에서는 바로 사라집니다. 계속할까요?'
-
-    if (!window.confirm(confirmMessage)) return
-
-    setApprovalSavingId(business.id)
-
-    try {
-      const { error } = await sb
-        .from('businesses')
-        .update({ approved: nextApproved })
-        .eq('id', business.id)
-
-      if (error) throw error
-
-      setBiz((prev) => {
-        const updated = prev.map((item) =>
-          item.id === business.id ? { ...item, approved: nextApproved } : item
-        )
-
-        return isAdmin ? updated : updated.filter((item) => item.approved)
-      })
-
-      setVipBiz((prev) =>
-        prev.map((item) =>
-          item.id === business.id ? { ...item, approved: nextApproved } : item
-        )
-      )
-
-      if (sel?.id === business.id) {
-        setSel((prev: any) => (prev ? { ...prev, approved: nextApproved } : prev))
-      }
-
-      setCounts((prev) => ({
-        ...prev,
-      }))
-
-      load()
-      loadVipBusinesses()
-    } catch (error: any) {
-      alert('승인 상태 변경 실패: ' + (error?.message || '알 수 없는 오류'))
-    } finally {
-      setApprovalSavingId(null)
-    }
-  }
-
   const closeModal = () => {
     setSel(null)
     setReviews([])
@@ -976,20 +971,13 @@ export default function Home() {
           </select>
         </div>
 
-        <div className="text-[11px] text-slate-400 mt-2 flex items-center justify-between gap-2">
-          <span>총 {totalCount}개 업소</span>
-          {isAdmin && (
-            <span className="text-[11px] font-bold text-indigo-600">
-              관리자 보기: 미승인 업소도 표시됩니다.
-            </span>
-          )}
+        <div className="text-[11px] text-slate-400 mt-2">
+          총 {totalCount}개 업소
         </div>
       </div>
 
       {enabledSectionKeys.map((section) => (
-        <div key={section.section_key}>
-          {sectionMap[section.section_key]}
-        </div>
+        <div key={section.section_key}>{sectionMap[section.section_key]}</div>
       ))}
 
       <HomeBusinessModal
@@ -1006,6 +994,7 @@ export default function Home() {
         relatedPostsLoading={relatedPostsLoading}
         claimLoading={claimLoading}
         avgRating={avgRating}
+        reviewTags={REVIEW_TAGS}
         onToggleReviewTag={toggleReviewTag}
         onSaveReview={saveReview}
         onRequestOwnerClaim={requestOwnerClaim}
