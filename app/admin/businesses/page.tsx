@@ -81,53 +81,123 @@ function tokenizeSearchQuery(value?: string) {
   )
 }
 
-function getBusinessSearchValues(row: BusinessRow) {
-  const values = [
-    row.name_kr,
-    row.name_en,
-    row.category_main,
-    row.category_sub,
-    row.address,
-    row.city,
-    row.phone,
-    row.metro_area,
-  ]
+function getBusinessSearchFields(row: BusinessRow) {
+  const fields = {
+    name_kr: normalizeSearchText(row.name_kr),
+    name_en: normalizeSearchText(row.name_en),
+    category_main: normalizeSearchText(row.category_main),
+    category_sub: normalizeSearchText(row.category_sub),
+    address: normalizeSearchText(row.address),
+    city: normalizeSearchText(row.city),
+    phone: normalizeSearchText(row.phone),
+    metro_area: normalizeSearchText(row.metro_area),
+  }
 
-  const joined = normalizeSearchText(values.filter(Boolean).join(' '))
-  const compact = normalizeCompactSearchText(values.filter(Boolean).join(' '))
+  const joined = normalizeSearchText(Object.values(fields).filter(Boolean).join(' '))
+  const compact = normalizeCompactSearchText(Object.values(fields).filter(Boolean).join(' '))
 
-  return { joined, compact }
+  return { fields, joined, compact }
 }
 
-function businessMatchesSearch(row: BusinessRow, rawQuery?: string) {
+function getBusinessSearchScore(row: BusinessRow, rawQuery?: string) {
   const normalizedQuery = normalizeSearchText(rawQuery)
-  if (!normalizedQuery) return true
+  if (!normalizedQuery) return 0
 
   const tokens = tokenizeSearchQuery(rawQuery)
   const compactQuery = normalizeCompactSearchText(rawQuery)
-  const { joined, compact } = getBusinessSearchValues(row)
+  const { fields, joined, compact } = getBusinessSearchFields(row)
 
-  if (!joined) return false
+  if (!joined) return 0
 
-  if (joined.includes(normalizedQuery) || (compactQuery && compact.includes(compactQuery))) {
-    return true
-  }
+  let score = 0
+  let matchedTokens = 0
+  let priorityMatchedTokens = 0
 
-  if (tokens.length === 0) return true
-
-  let matched = 0
+  if (fields.name_kr.includes(normalizedQuery)) score += 900
+  if (fields.name_en.includes(normalizedQuery)) score += 850
+  if (fields.category_main.includes(normalizedQuery)) score += 700
+  if (fields.category_sub.includes(normalizedQuery)) score += 650
+  if (joined.includes(normalizedQuery)) score += 260
+  if (compactQuery && compact.includes(compactQuery)) score += 220
 
   for (const token of tokens) {
     const compactToken = normalizeCompactSearchText(token)
     if (!compactToken) continue
 
-    if (joined.includes(token) || compact.includes(compactToken)) {
-      matched += 1
+    let tokenMatched = false
+    let tokenPriorityMatched = false
+
+    if (fields.name_kr.includes(token)) {
+      score += 220
+      tokenMatched = true
+      tokenPriorityMatched = true
     }
+    if (fields.name_en.includes(token)) {
+      score += 200
+      tokenMatched = true
+      tokenPriorityMatched = true
+    }
+    if (fields.category_main.includes(token)) {
+      score += 150
+      tokenMatched = true
+      tokenPriorityMatched = true
+    }
+    if (fields.category_sub.includes(token)) {
+      score += 120
+      tokenMatched = true
+      tokenPriorityMatched = true
+    }
+    if (fields.city.includes(token)) {
+      score += 45
+      tokenMatched = true
+    }
+    if (fields.metro_area.includes(token)) {
+      score += 35
+      tokenMatched = true
+    }
+    if (fields.address.includes(token)) {
+      score += 30
+      tokenMatched = true
+    }
+    if (fields.phone.includes(token)) {
+      score += 25
+      tokenMatched = true
+    }
+
+    if (!tokenMatched && compact.includes(compactToken)) {
+      score += 30
+      tokenMatched = true
+    }
+
+    if (tokenMatched) matchedTokens += 1
+    if (tokenPriorityMatched) priorityMatchedTokens += 1
   }
 
-  const minimumMatches = tokens.length >= 3 ? 2 : 1
-  return matched >= minimumMatches
+  if (tokens.length > 0 && matchedTokens === tokens.length) score += 260
+  if (tokens.length >= 2 && matchedTokens >= 2) score += 120
+  if (tokens.length >= 2 && priorityMatchedTokens >= 2) score += 180
+  if (tokens.length >= 3 && priorityMatchedTokens >= 2) score += 120
+  if (!priorityMatchedTokens && (fields.address.includes(normalizedQuery) || fields.city.includes(normalizedQuery) || fields.metro_area.includes(normalizedQuery))) score -= 120
+
+  const minimumMatchedTokens = tokens.length >= 3 ? 2 : 1
+  const hasStrongExactMatch =
+    fields.name_kr.includes(normalizedQuery) ||
+    fields.name_en.includes(normalizedQuery) ||
+    fields.category_main.includes(normalizedQuery) ||
+    fields.category_sub.includes(normalizedQuery)
+
+  const passes =
+    hasStrongExactMatch ||
+    joined.includes(normalizedQuery) ||
+    (compactQuery && compact.includes(compactQuery)) ||
+    (matchedTokens >= minimumMatchedTokens && priorityMatchedTokens >= 1) ||
+    (tokens.length === 1 && matchedTokens >= 1)
+
+  return passes ? score : 0
+}
+
+function businessMatchesSearch(row: BusinessRow, rawQuery?: string) {
+  return getBusinessSearchScore(row, rawQuery) > 0
 }
 
 function normalizeCityFromAddress(address?: string | null) {
@@ -387,9 +457,25 @@ export default function AdminBusinessesPage() {
       return
     }
 
-    const rows = ((data || []) as BusinessRow[]).filter((row) =>
-      businessMatchesSearch(row, term)
-    )
+    const rows = ((data || []) as BusinessRow[])
+      .filter((row) => businessMatchesSearch(row, term))
+      .sort((a, b) => {
+        const query = normalizeSearchText(term)
+
+        if (query) {
+          const aScore = getBusinessSearchScore(a, term)
+          const bScore = getBusinessSearchScore(b, term)
+          if (aScore !== bScore) return bScore - aScore
+        }
+
+        const aVip = a.is_vip ? 1 : 0
+        const bVip = b.is_vip ? 1 : 0
+        if (aVip !== bVip) return bVip - aVip
+
+        const aName = normalizeSearchText(a.name_kr || a.name_en)
+        const bName = normalizeSearchText(b.name_kr || b.name_en)
+        return aName.localeCompare(bName)
+      })
 
     setList(rows)
     setLoading(false)
