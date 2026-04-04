@@ -26,7 +26,6 @@ type Category = {
   id: string
   name: string
   icon: string
-  sort_order?: number
 }
 
 export default function HomeBusinessList({
@@ -35,7 +34,7 @@ export default function HomeBusinessList({
   favs,
   onToggleFav,
   onOpenBusiness,
-  isAdmin = false,
+  isAdmin,
   onToggleApproved,
 }: {
   biz: any[]
@@ -44,14 +43,10 @@ export default function HomeBusinessList({
   onToggleFav: (id: string, e: any) => void
   onOpenBusiness: (b: any) => void
   isAdmin?: boolean
-  onToggleApproved?: (b: any) => void
+  onToggleApproved?: (id: string, current: boolean) => void
 }) {
   if (!biz || biz.length === 0) {
-    return (
-      <div className="text-center py-20 text-slate-400">
-        검색 결과가 없습니다
-      </div>
-    )
+    return <div className="text-center py-20 text-slate-400">검색 결과가 없습니다</div>
   }
 
   return (
@@ -61,113 +56,52 @@ export default function HomeBusinessList({
           cats.find((c) => c.name === b.category_main) || cats[cats.length - 1]
 
         const isFav = favs.includes(b.id)
-        const addr =
-          b.address?.split(',').slice(0, -2).join(',').trim() || b.address
 
         return (
           <div
             key={b.id}
             onClick={() => onOpenBusiness(b)}
-            className={`bg-white rounded-xl border px-4 py-3.5 flex gap-3 cursor-pointer active:scale-[.99] transition-all ${
-              b.is_vip ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'
+            className={`bg-white rounded-xl border px-4 py-3 flex gap-3 cursor-pointer ${
+              b.is_vip ? 'border-amber-300' : 'border-slate-200'
             }`}
           >
-            <div
-              className={`w-11 h-11 rounded-lg flex items-center justify-center text-2xl flex-shrink-0 ${
-                CAT_BG[b.category_main] || 'bg-slate-50'
-              }`}
-            >
+            <div className={`w-10 h-10 flex items-center justify-center ${CAT_BG[b.category_main]}`}>
               {catInfo?.icon || '📋'}
             </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex gap-1 mb-1 flex-wrap">
-                {!b.approved && (
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-300 text-slate-700">
-                    검토중
-                  </span>
-                )}
+            <div className="flex-1">
+              <div className="font-bold">{b.name_kr || b.name_en}</div>
 
-                {b.is_vip && b.vip_tier && (
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">
-                    ⭐ {b.vip_tier.toUpperCase()}
-                  </span>
-                )}
-
-                {b.category_sub && (
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                    {b.category_sub}
-                  </span>
-                )}
-
-                {isAdmin && onToggleApproved && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onToggleApproved(b)
-                    }}
-                    className={`text-[10px] font-black px-2 py-0.5 rounded border ${
-                      b.approved
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                  >
-                    {b.approved ? '승인해제' : '승인'}
-                  </button>
-                )}
-              </div>
-
-              <div className="text-[16px] font-bold text-slate-900 truncate">
-                {b.name_kr || b.name_en}
-              </div>
-
-              {addr && (
-                <div className="text-[12px] text-slate-500 truncate mt-0.5">
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {addr}
-                  </a>
-                </div>
+              {!b.approved && (
+                <div className="text-[10px] text-red-500 font-bold">검토중</div>
               )}
 
-              <div className="flex items-center gap-2.5 mt-1 flex-wrap">
-                {b.city && (
-                  <span className="text-[11px] font-bold text-slate-400">
-                    {b.city}
-                  </span>
-                )}
+              <div className="text-[12px] text-slate-400">{b.city}</div>
 
-                {Number(b.rating || 0) > 0 && (
-                  <span className="text-[12px] font-bold text-slate-800">
-                    ★{Number(b.rating || 0).toFixed(1)}{' '}
-                    <span className="text-[11px] font-normal text-slate-400">
-                      ({(b.review_count || 0).toLocaleString()})
-                    </span>
-                  </span>
-                )}
-
-                {b.phone && (
-                  <span className="text-[12px] font-bold text-indigo-600">
-                    {b.phone}
-                  </span>
-                )}
-              </div>
+              {b.phone && (
+                <div className="text-[12px] text-indigo-600">{b.phone}</div>
+              )}
             </div>
 
-            <button
-              onClick={(e: any) => onToggleFav(b.id, e)}
-              className="flex-shrink-0 self-start pt-0.5 p-1"
-            >
-              <span
-                className={`text-xl ${isFav ? 'text-red-500' : 'text-slate-300'}`}
+            {/* ⭐ 관리자 전용 승인 토글 */}
+            {isAdmin && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleApproved?.(b.id, b.approved)
+                }}
+                className={`text-xs px-2 py-1 rounded ${
+                  b.approved
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-200 text-gray-600'
+                }`}
               >
-                {isFav ? '♥' : '♡'}
-              </span>
+                {b.approved ? '승인' : '미승인'}
+              </button>
+            )}
+
+            <button onClick={(e) => onToggleFav(b.id, e)}>
+              {isFav ? '♥' : '♡'}
             </button>
           </div>
         )
