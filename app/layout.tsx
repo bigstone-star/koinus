@@ -3,10 +3,12 @@ import type { Metadata } from 'next'
 import GlobalHeader from '@/components/GlobalHeader'
 import ThemeLoader from '@/components/ThemeLoader'
 
-export const metadata: Metadata = {
-  metadataBase: new URL('https://kyocharo-houston.vercel.app'),
-  title: '교차로 휴스턴',
-  description: '한인 업소 디렉토리',
+export const metadata = {
+  title: {
+    default: 'KOinUS',
+    template: '%s | KOinUS',
+  },
+  description: 'KOinUS 한인 비즈니스 플랫폼',
 }
 
 export default function RootLayout({
