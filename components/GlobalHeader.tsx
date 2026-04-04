@@ -19,47 +19,14 @@ export default function GlobalHeader() {
   const [profile, setProfile] = useState<any>(null)
   const [currentRegion, setCurrentRegion] = useState('houston')
   const [menuOpen, setMenuOpen] = useState(false)
+
+  // ✅ 추가
   const [logoUrl, setLogoUrl] = useState('')
 
   useEffect(() => {
-    const init = async () => {
-      const { data } = await sb.auth.getUser()
-      const currentUser = data.user ?? null
-      setUser(currentUser)
-
-      if (!currentUser) {
-        setProfile(null)
-      } else {
-        const { data: p } = await sb
-          .from('user_profiles')
-          .select('name, nickname, role')
-          .eq('id', currentUser.id)
-          .maybeSingle()
-
-        setProfile(p || null)
-      }
-
-      const { data: logoData } = await sb
-        .from('settings')
-        .select('value')
-        .eq('key', 'logo_url')
-        .maybeSingle()
-
-      setLogoUrl(logoData?.value || '')
-    }
-
-    const syncRegionFromStorage = () => {
-      try {
-        const savedRegion = localStorage.getItem('gj_region')
-        if (savedRegion) setCurrentRegion(savedRegion)
-        else setCurrentRegion('houston')
-      } catch {
-        setCurrentRegion('houston')
-      }
-    }
-
     init()
     syncRegionFromStorage()
+    loadLogo() // ✅ 로고 불러오기
 
     const handleRegionChanged = (e: any) => {
       const nextRegion = e?.detail || 'houston'
@@ -77,33 +44,11 @@ export default function GlobalHeader() {
       }
     }
 
-    const {
-      data: { subscription },
-    } = sb.auth.onAuthStateChange(async (_, session) => {
-      const nextUser = session?.user ?? null
-      setUser(nextUser)
-
-      if (!nextUser) {
-        setProfile(null)
-        setMenuOpen(false)
-        return
-      }
-
-      const { data: p } = await sb
-        .from('user_profiles')
-        .select('name, nickname, role')
-        .eq('id', nextUser.id)
-        .maybeSingle()
-
-      setProfile(p || null)
-    })
-
     window.addEventListener('gj_region_changed', handleRegionChanged)
     window.addEventListener('storage', handleStorage)
     document.addEventListener('mousedown', handleClickOutside)
 
     return () => {
-      subscription.unsubscribe()
       window.removeEventListener('gj_region_changed', handleRegionChanged)
       window.removeEventListener('storage', handleStorage)
       document.removeEventListener('mousedown', handleClickOutside)
@@ -111,6 +56,39 @@ export default function GlobalHeader() {
   }, [])
 
   useEffect(() => {
+    syncRegionFromStorage()
+    setMenuOpen(false)
+  }, [pathname])
+
+  const init = async () => {
+    const { data } = await sb.auth.getUser()
+    setUser(data.user)
+
+    if (data.user) {
+      const { data: p } = await sb
+        .from('user_profiles')
+        .select('name, role')
+        .eq('id', data.user.id)
+        .maybeSingle()
+
+      setProfile(p || null)
+    } else {
+      setProfile(null)
+    }
+  }
+
+  // ✅ 로고 불러오기
+  const loadLogo = async () => {
+    const { data } = await sb
+      .from('settings')
+      .select('value')
+      .eq('key', 'logo_url')
+      .maybeSingle()
+
+    if (data?.value) setLogoUrl(data.value)
+  }
+
+  const syncRegionFromStorage = () => {
     try {
       const savedRegion = localStorage.getItem('gj_region')
       if (savedRegion) setCurrentRegion(savedRegion)
@@ -118,14 +96,10 @@ export default function GlobalHeader() {
     } catch {
       setCurrentRegion('houston')
     }
-
-    setMenuOpen(false)
-  }, [pathname])
+  }
 
   const signOut = async () => {
     await sb.auth.signOut()
-    setUser(null)
-    setProfile(null)
     setMenuOpen(false)
     router.push('/')
     router.refresh()
@@ -145,38 +119,35 @@ export default function GlobalHeader() {
       : 'bg-white/10 text-white/90 border border-white/15'
 
   const displayName =
-    profile?.nickname ||
     profile?.name ||
     user?.user_metadata?.name ||
     user?.email?.split('@')?.[0] ||
     '회원'
 
   return (
-    <div className="bg-[#1a1a2e] text-white px-3 py-3 flex items-center justify-between gap-3 relative z-50">
+    <div className="bg-[#1a1a2e] text-white px-3 py-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
+
+        {/* ✅ 로고 부분 */}
         <Link
-          href="/"
-          className="flex items-center shrink-0"
-          style={{ height: '40px', overflow: 'hidden' }}
-        >
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="logo"
-              style={{
-                height: '26px',
-                maxHeight: '26px',
-                width: 'auto',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
-          ) : (
-            <span className="font-extrabold text-[18px] tracking-tight">
-              <span className="text-amber-400">교차로</span> TEXAS
-            </span>
-          )}
-        </Link>
+  href="/"
+  className="flex items-center shrink-0"
+  style={{ height: '40px', overflow: 'hidden' }}
+>
+  {logoUrl && (
+    <img
+      src={logoUrl}
+      alt="logo"
+      style={{
+        height: '25px',
+        maxHeight: '26px',
+        width: 'auto',
+        objectFit: 'contain',
+        display: 'block',
+      }}
+    />
+  )}
+</Link>
 
         <div className="flex items-center gap-2 ml-2 min-w-0">
           <Link
@@ -212,18 +183,6 @@ export default function GlobalHeader() {
                 </span>
               )}
 
-              {profile?.role === 'admin' && (
-                <span className="bg-blue-500 px-2 py-0.5 rounded text-white text-[10px] font-extrabold whitespace-nowrap">
-                  ADMIN
-                </span>
-              )}
-
-              {profile?.role === 'owner' && (
-                <span className="bg-emerald-500 px-2 py-0.5 rounded text-white text-[10px] font-extrabold whitespace-nowrap">
-                  OWNER
-                </span>
-              )}
-
               <span className="text-white/60 text-[10px]">▾</span>
             </button>
 
@@ -233,20 +192,7 @@ export default function GlobalHeader() {
                   <div className="text-[13px] font-bold text-slate-800 truncate">
                     {displayName}
                   </div>
-                  {user?.email && (
-                    <div className="text-[11px] text-slate-400 truncate mt-1">
-                      {user.email}
-                    </div>
-                  )}
                 </div>
-
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMenuOpen(false)}
-                  className="block px-4 py-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  내 정보 보기
-                </Link>
 
                 <button
                   onClick={signOut}
