@@ -273,8 +273,78 @@ export default function AdminBusinessesPage() {
   }, [tab, search, ok])
 
   const loadList = useCallback(
+  async (
+    searchTerm?: string,
+    tabOverride?: 'pending' | 'vip' | 'all' | 'categories' | 'trash',
+    regionOverride?: string
+  ) => {
+    const currentTab = tabOverride ?? tab
 
-  async function loadCats() {
+    if (currentTab === 'categories') {
+      await loadCats()
+      return
+    }
+
+    setLoading(true)
+    setSelected(new Set())
+
+    let q =
+      currentTab === 'trash'
+        ? sb.from('businesses').select('*').eq('is_active', false)
+        : sb.from('businesses').select('*').eq('is_active', true)
+
+    if (currentTab === 'pending') q = q.eq('data_source', 'user_registered')
+    if (currentTab === 'vip') q = q.eq('is_vip', true)
+
+    const currentRegion = regionOverride ?? region
+    if (currentRegion !== 'all') {
+      q = q.eq('metro_area', currentRegion)
+    }
+
+    const { data, error } = await q
+      .order('created_at', { ascending: false })
+      .limit(500)
+
+    if (error) {
+      setErrorMsg('업소 목록을 불러오지 못했습니다.')
+      setList([])
+      setLoading(false)
+      return
+    }
+
+    let nextList = (data || []) as BusinessRow[]
+
+    const term = (searchTerm !== undefined ? searchTerm : search)
+      .toLowerCase()
+      .trim()
+
+    if (term) {
+      const terms = term.split(' ').filter(Boolean)
+
+      nextList = nextList.filter((b) => {
+        const text = [
+          b.name_kr,
+          b.name_en,
+          b.category_main,
+          b.category_sub,
+          b.address,
+          b.city,
+          b.phone,
+          b.metro_area,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        return terms.some((t) => text.includes(t))
+      })
+    }
+
+    setList(nextList)
+    setLoading(false)
+  },
+  [tab, search, region]
+)
     try {
       setCatLoading(true)
 
