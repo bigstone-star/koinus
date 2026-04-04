@@ -272,7 +272,12 @@ export default function AdminBusinessesPage() {
     } catch {}
   }, [tab, search, ok])
 
-  const loadList = useCallback(async (searchTerm?: string, tabOverride?: 'pending' | 'vip' | 'all' | 'categories' | 'trash', regionOverride?: string) => {
+  const loadList = useCallback(
+  async (
+    searchTerm?: string,
+    tabOverride?: 'pending' | 'vip' | 'all' | 'categories' | 'trash',
+    regionOverride?: string
+  ) => {
     const currentTab = tabOverride ?? tab
 
     if (currentTab === 'categories') {
@@ -284,29 +289,12 @@ export default function AdminBusinessesPage() {
     setSelected(new Set())
 
     let q =
-  tabOverride === 'trash' || tab === 'trash'
-    ? sb.from('businesses').select('*').eq('is_active', false)
-    : sb.from('businesses').select('*').eq('is_active', true)
+      currentTab === 'trash'
+        ? sb.from('businesses').select('*').eq('is_active', false)
+        : sb.from('businesses').select('*').eq('is_active', true)
 
     if (currentTab === 'pending') q = q.eq('data_source', 'user_registered')
     if (currentTab === 'vip') q = q.eq('is_vip', true)
-
-    const term = searchTerm !== undefined ? searchTerm : search
-
-    if (term.trim()) {
-      q = q.or(
-        [
-          `name_kr.ilike.%${term}%`,
-          `name_en.ilike.%${term}%`,
-          `category_main.ilike.%${term}%`,
-          `category_sub.ilike.%${term}%`,
-          `address.ilike.%${term}%`,
-          `phone.ilike.%${term}%`,
-          `metro_area.ilike.%${term}%`,
-          `city.ilike.%${term}%`,
-        ].join(',')
-      )
-    }
 
     const currentRegion = regionOverride ?? region
     if (currentRegion !== 'all') {
@@ -315,17 +303,51 @@ export default function AdminBusinessesPage() {
 
     const { data, error } = await q
       .order('created_at', { ascending: false })
-      .limit(200)
+      .limit(500)
 
     if (error) {
       setErrorMsg('업소 목록을 불러오지 못했습니다.')
       setList([])
-    } else {
-      setList((data || []) as BusinessRow[])
+      setLoading(false)
+      return
     }
 
+    let nextList = (data || []) as BusinessRow[]
+
+    const term = (searchTerm !== undefined ? searchTerm : search)
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (term) {
+      const terms = term
+        .split(' ')
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean)
+
+      nextList = nextList.filter((b) => {
+        const haystack = [
+          b.name_kr,
+          b.name_en,
+          b.category_main,
+          b.category_sub,
+          b.address,
+          b.phone,
+          b.metro_area,
+          b.city,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        return terms.every((piece) => haystack.includes(piece))
+      })
+    }
+
+    setList(nextList.slice(0, 200))
     setLoading(false)
-  }, [tab, search, region])
+  },
+  [tab, search, region]
+)
 
   async function loadStats() {
     try {
