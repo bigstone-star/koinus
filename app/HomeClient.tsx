@@ -934,32 +934,31 @@ export default function Home() {
             ))}
           </select>
 
-          <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
+                    <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
             <span className="text-slate-300">🔍</span>
             <input
-            <input
-  ref={searchInputRef}
-  value={search}
-  onChange={(e) => setSearch(e.target.value)}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter') {
-      searchInputRef.current?.blur()
-      setTimeout(() => {
-        window.scrollTo({ top: window.scrollY, behavior: 'auto' })
-      }, 50)
-    }
-  }}
-  onBlur={() => {
-    setTimeout(() => {
-      window.scrollTo({ top: window.scrollY, behavior: 'auto' })
-    }, 50)
-  }}
-  inputMode="search"
-  enterKeyHint="search"
-  placeholder="업소명, 업종, 주소, 전화번호 검색"
-  className="w-full bg-transparent border-none outline-none text-slate-700 py-2.5 placeholder:text-slate-400 md:text-[13px]"
-  style={{ fontSize: '16px' }}
-/>
+              ref={searchInputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  searchInputRef.current?.blur()
+                  setTimeout(() => {
+                    window.scrollTo({ top: window.scrollY, behavior: 'auto' })
+                  }, 50)
+                }
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  window.scrollTo({ top: window.scrollY, behavior: 'auto' })
+                }, 50)
+              }}
+              inputMode="search"
+              enterKeyHint="search"
+              placeholder="업소명, 업종, 주소, 전화번호 검색"
+              className="w-full bg-transparent border-none outline-none text-slate-700 py-2.5 placeholder:text-slate-400 md:text-[13px]"
+              style={{ fontSize: '16px' }}
+            />
           </div>
 
           <select
