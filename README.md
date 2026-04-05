@@ -55,3 +55,4 @@ NEXT_PUBLIC_URL=https://kyocharo-houston.vercel.app
 ## 관리자
 - `/admin` — 업소 관리, 카테고리, 배너
 - role: `admin` 또는 `super_admin`
+// trigger redeploy
