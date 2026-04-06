@@ -29,9 +29,6 @@ const REGIONS = [
   { value: 'central_texas', label: 'Central Texas' },
 ]
 
-const INITIAL_BUSINESS_LOAD = 10
-const SEARCH_FETCH_LIMIT = 1000
-
 type Category = {
   id: string
   name: string
@@ -59,14 +56,6 @@ type HomeSection = {
   is_enabled: boolean
   sort_order: number
 }
-
-
-const DEFAULT_HOME_SECTIONS: HomeSection[] = [
-  { id: '1', section_key: 'community_latest', section_label: '커뮤니티 최신글', is_enabled: true, sort_order: 1 },
-  { id: '2', section_key: 'category_grid', section_label: '업소 카테고리', is_enabled: true, sort_order: 2 },
-  { id: '3', section_key: 'vip_businesses', section_label: '지역 추천업소', is_enabled: true, sort_order: 3 },
-  { id: '4', section_key: 'business_list', section_label: '일반 업소 리스트', is_enabled: true, sort_order: 4 },
-]
 
 function normalizeText(value: any) {
   return String(value || '')
@@ -229,11 +218,11 @@ function matchesCategory(business: any, selectedCategory: string) {
 export default function Home() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isUrlReady, setIsUrlReady] = useState(false)
+  const hasInitializedFromUrl = useRef(false)
   const hasWrittenUrl = useRef(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [sections, setSections] = useState<HomeSection[]>(DEFAULT_HOME_SECTIONS)
+  const [sections, setSections] = useState<HomeSection[]>([])
   const [biz, setBiz] = useState<any[]>([])
   const [vipBiz, setVipBiz] = useState<any[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPreviewPost[]>([])
@@ -245,14 +234,11 @@ export default function Home() {
   const [sort, setSort] = useState<SortType>('rating')
   const [sel, setSel] = useState<any>(null)
   const [favs, setFavs] = useState<string[]>([])
-  const [counts] = useState<Record<string, number>>({})
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [cats, setCats] = useState<Category[]>([])
-  const [visibleCount, setVisibleCount] = useState(INITIAL_BUSINESS_LOAD)
-  const [hasMore, setHasMore] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [searchResultCount, setSearchResultCount] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
   const [region, setRegion] = useState('houston')
   const [approvalSavingId, setApprovalSavingId] = useState<string | null>(null)
 
@@ -298,14 +284,19 @@ export default function Home() {
       .order('sort_order', { ascending: true })
 
     if (error || !data || data.length === 0) {
-      setSections(DEFAULT_HOME_SECTIONS)
+      setSections([
+        { id: '1', section_key: 'community_latest', section_label: '커뮤니티 최신글', is_enabled: true, sort_order: 1 },
+        { id: '2', section_key: 'category_grid', section_label: '업소 카테고리', is_enabled: true, sort_order: 2 },
+        { id: '3', section_key: 'vip_businesses', section_label: '지역 추천업소', is_enabled: true, sort_order: 3 },
+        { id: '4', section_key: 'business_list', section_label: '일반 업소 리스트', is_enabled: true, sort_order: 4 },
+      ])
       return
     }
 
     setSections(data as HomeSection[])
   }, [])
 
-  const loadVipBusinesses = useCallback(async () => {
+    const loadVipBusinesses = useCallback(async () => {
     let q = sb
       .from('businesses')
       .select('*')
@@ -383,121 +374,97 @@ export default function Home() {
     [region]
   )
 
-  const load = useCallback(async () => {
+    const load = useCallback(async () => {
     setLoading(true)
 
-    try {
-      const normalizedSearch = normalizeText(search)
-      const hasSearch = normalizedSearch.length > 0
+    const normalizedSearch = normalizeText(search)
+    const hasSearch = normalizedSearch.length > 0
 
-      if (!hasSearch) {
-        setSearchResultCount(0)
-      }
+    let q = sb
+      .from('businesses')
+      .select('*')
+      .eq('is_active', true)
+      .eq('metro_area', region)
 
-      let q = sb
-        .from('businesses')
-        .select('*')
-        .eq('is_active', true)
-        .eq('metro_area', region)
-
-      if (!isAdmin) {
-        q = q
-          .eq('approved', true)
-          .neq('source', 'Google Places API (New)')
-      }
-
-      if (cat !== '전체') {
-        q = q.eq('category_main', cat)
-      }
-
+    if (!isAdmin) {
       q = q
-        .order('is_vip', { ascending: false })
-        .order('rating', { ascending: false, nullsFirst: false })
-        .order('review_count', { ascending: false, nullsFirst: false })
-
-      const { data, error } = await q.range(0, (hasSearch ? SEARCH_FETCH_LIMIT : INITIAL_BUSINESS_LOAD) - 1)
-
-      if (error) {
-        console.error('business load error:', error)
-        setBiz([])
-        setHasMore(false)
-        return
-      }
-
-      const sourceList = data || []
-
-      let filtered = hasSearch
-        ? sourceList
-        : sourceList.filter((business) => matchesCategory(business, cat))
-
-      if (hasSearch) {
-        filtered = filtered
-          .map((business) => ({
-            business,
-            score: getSearchScore(business, normalizedSearch),
-          }))
-          .filter((item) => item.score > 0)
-          .sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score
-
-            const aVip = a.business?.is_vip ? 1 : 0
-            const bVip = b.business?.is_vip ? 1 : 0
-            if (bVip !== aVip) return bVip - aVip
-
-            if (sort === 'review_count') {
-              const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
-              if (byReviewCount !== 0) return byReviewCount
-
-              const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
-              if (byRating !== 0) return byRating
-            } else if (sort === 'name_en') {
-              const byName = getSortableName(a.business).localeCompare(
-                getSortableName(b.business),
-                'ko'
-              )
-              if (byName !== 0) return byName
-            } else {
-              const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
-              if (byRating !== 0) return byRating
-
-              const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
-              if (byReviewCount !== 0) return byReviewCount
-            }
-
-            return getSortableName(a.business).localeCompare(getSortableName(b.business), 'ko')
-          })
-          .map((item) => item.business)
-
-        setSearchResultCount(filtered.length)
-      } else {
-        filtered = applyBusinessSort(filtered, sort)
-      }
-
-      setBiz(filtered)
-      setVisibleCount(INITIAL_BUSINESS_LOAD)
-      setHasMore(filtered.length > INITIAL_BUSINESS_LOAD)
-    } catch (error) {
-      console.error('business load unexpected error:', error)
-      setBiz([])
-      setHasMore(false)
-    } finally {
-      setLoading(false)
+        .eq('approved', true)
+        .neq('source', 'Google Places API (New)')
     }
+
+    if (cat !== '전체') {
+      q = q.eq('category_main', cat)
+    }
+
+    q = q
+      .order('is_vip', { ascending: false })
+      .order('rating', { ascending: false, nullsFirst: false })
+      .order('review_count', { ascending: false, nullsFirst: false })
+
+    const fetchLimit = hasSearch ? 1000 : 200
+    const { data, error } = await q.range(0, fetchLimit - 1)
+
+    if (error) {
+      console.error('business load error:', error)
+      setBiz([])
+      setLoading(false)
+      return
+    }
+
+    const sourceList = data || []
+
+    let filtered = hasSearch
+      ? sourceList
+      : sourceList.filter((business) => matchesCategory(business, cat))
+
+    if (hasSearch) {
+      filtered = filtered
+        .map((business) => ({
+          business,
+          score: getSearchScore(business, normalizedSearch),
+        }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score
+
+          const aVip = a.business?.is_vip ? 1 : 0
+          const bVip = b.business?.is_vip ? 1 : 0
+          if (bVip !== aVip) return bVip - aVip
+
+          if (sort === 'review_count') {
+            const byReviewCount =
+              Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
+            if (byReviewCount !== 0) return byReviewCount
+
+            const byRating =
+              Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
+            if (byRating !== 0) return byRating
+          } else if (sort === 'name_en') {
+            const byName = getSortableName(a.business).localeCompare(
+              getSortableName(b.business),
+              'ko'
+            )
+            if (byName !== 0) return byName
+          } else {
+            const byRating =
+              Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
+            if (byRating !== 0) return byRating
+
+            const byReviewCount =
+              Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
+            if (byReviewCount !== 0) return byReviewCount
+          }
+
+          return getSortableName(a.business).localeCompare(getSortableName(b.business), 'ko')
+        })
+        .map((item) => item.business)
+    } else {
+      filtered = applyBusinessSort(filtered, sort)
+    }
+
+    setBiz(filtered.slice(0, 20))
+    setLoading(false)
   }, [cat, search, sort, region, isAdmin])
-
-  const handleLoadMore = useCallback(async () => {
-    if (isLoadingMore || !hasMore) return
-
-    setIsLoadingMore(true)
-    setVisibleCount((prev) => {
-      const next = prev + INITIAL_BUSINESS_LOAD
-      if (next >= biz.length) {
-        setHasMore(false)
-      }
-      return next
-    })
-    setIsLoadingMore(false)
-  }, [biz.length, hasMore, isLoadingMore])
 
   const toggleApprovedFromHome = useCallback(
     async (business: any) => {
@@ -578,6 +545,8 @@ export default function Home() {
   }, [loadAuthUser, loadSections])
 
   useEffect(() => {
+    if (hasInitializedFromUrl.current) return
+
     const urlRegion = searchParams.get('region')
     const urlSearch = searchParams.get('search')
     const urlCat = searchParams.get('cat')
@@ -602,7 +571,7 @@ export default function Home() {
       setSort(urlSort)
     }
 
-    setIsUrlReady(true)
+    hasInitializedFromUrl.current = true
   }, [searchParams])
 
   useEffect(() => {
@@ -615,7 +584,7 @@ export default function Home() {
   }, [region])
 
   useEffect(() => {
-    if (!isUrlReady) return
+    if (!hasInitializedFromUrl.current) return
 
     const params = new URLSearchParams()
 
@@ -625,7 +594,6 @@ export default function Home() {
     if (sort && sort !== 'rating') params.set('sort', sort)
 
     const qs = params.toString()
-    const currentQs = searchParams.toString()
     const nextUrl = qs ? `/?${qs}` : '/'
 
     if (!hasWrittenUrl.current) {
@@ -633,18 +601,100 @@ export default function Home() {
       return
     }
 
-    if (qs === currentQs) return
-
     router.replace(nextUrl, { scroll: false })
-  }, [isUrlReady, region, search, cat, sort, router, searchParams])
+  }, [region, search, cat, sort, router])
 
   useEffect(() => {
-    if (!isUrlReady) return
+  let cancelled = false
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
+  const loadCounts = async () => {
+    try {
+      let totalQuery = sb
+        .from('businesses')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .eq('metro_area', region)
+
+      if (!isAdmin) {
+        totalQuery = totalQuery
+          .eq('approved', true)
+          .neq('source', 'Google Places API (New)')
+      }
+
+      const { count: total, error: totalError } = await totalQuery
+
+      if (!cancelled && !totalError && total !== null) {
+        setTotalCount(total)
+      }
+
+      if (!cats || cats.length === 0) {
+        if (!cancelled) {
+          setCounts({ 전체: total || 0 })
+        }
+        return
+      }
+
+      const nextCounts: Record<string, number> = {
+        전체: total || 0,
+      }
+
+      const realCategories = cats.filter((c) => c.name !== '전체')
+
+      const results = await Promise.all(
+        realCategories.map(async (category) => {
+          let countQuery = sb
+            .from('businesses')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .eq('metro_area', region)
+            .eq('category_main', category.name)
+
+          if (!isAdmin) {
+            countQuery = countQuery
+                .eq('approved', true)
+                .neq('source', 'Google Places API (New)')
+          }
+
+          const { count, error } = await countQuery
+
+          return {
+            name: category.name,
+            count: !error && count !== null ? count : 0,
+          }
+        })
+      )
+
+      if (cancelled) return
+
+      results.forEach((item) => {
+        nextCounts[item.name] = item.count
+      })
+
+      setCounts(nextCounts)
+    } catch (e) {
+      console.error('loadCounts error:', e)
+    }
+  }
+
+  // 첫 화면은 업소 리스트/VIP/기본 섹션을 먼저 보여주고,
+  // 카운트는 조금 늦게 로드해서 체감 속도를 높임
+  timeoutId = setTimeout(() => {
+    loadCounts()
+  }, 800)
+
+  return () => {
+    cancelled = true
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}, [region, cats, isAdmin])
+
+  useEffect(() => {
+    if (!hasInitializedFromUrl.current) return
     loadCommunityPreview()
     loadVipBusinesses()
     load()
-  }, [isUrlReady, loadCommunityPreview, loadVipBusinesses, load])
+  }, [loadCommunityPreview, loadVipBusinesses, load])
 
   const loadReviews = useCallback(
     async (businessId: string) => {
@@ -843,7 +893,7 @@ export default function Home() {
     loadRelatedCommunityPosts(b.id)
   }
 
-  const sectionMap: Record<string, JSX.Element> = {
+  const sectionMap: Record<string, React.ReactNode> = {
     community_latest: (
       <HomeCommunityLatest
         posts={communityPosts}
@@ -870,7 +920,7 @@ export default function Home() {
           </div>
         ) : (
           <HomeBusinessList
-            biz={biz.slice(0, visibleCount)}
+            biz={biz}
             cats={cats}
             favs={favs}
             onToggleFav={toggleFav}
@@ -878,9 +928,6 @@ export default function Home() {
             isAdmin={isAdmin}
             approvalSavingId={approvalSavingId}
             onToggleApproved={toggleApprovedFromHome}
-            hasMore={hasMore}
-            onLoadMore={handleLoadMore}
-            isLoadingMore={isLoadingMore}
           />
         )}
       </div>
@@ -911,7 +958,7 @@ export default function Home() {
             ))}
           </select>
 
-          <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
+                    <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
             <span className="text-slate-300">🔍</span>
             <input
               ref={searchInputRef}
@@ -949,14 +996,12 @@ export default function Home() {
           </select>
         </div>
 
-        {search.trim() ? (
-          <div className="text-[11px] text-slate-400 mt-2">
-            검색 결과 {searchResultCount}개
-          </div>
-        ) : null}
+        <div className="text-[11px] text-slate-400 mt-2">
+          총 {totalCount}개 업소
+        </div>
       </div>
 
-      {(enabledSectionKeys.length > 0 ? enabledSectionKeys : DEFAULT_HOME_SECTIONS).map((section) => (
+      {enabledSectionKeys.map((section) => (
         <div key={section.section_key}>
           {sectionMap[section.section_key]}
         </div>
