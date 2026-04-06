@@ -386,97 +386,103 @@ export default function Home() {
   const load = useCallback(async () => {
     setLoading(true)
 
-    const normalizedSearch = normalizeText(search)
-    const hasSearch = normalizedSearch.length > 0
+    try {
+      const normalizedSearch = normalizeText(search)
+      const hasSearch = normalizedSearch.length > 0
 
-    if (!hasSearch) {
-      setSearchResultCount(0)
-    }
+      if (!hasSearch) {
+        setSearchResultCount(0)
+      }
 
-    let q = sb
-      .from('businesses')
-      .select('*')
-      .eq('is_active', true)
-      .eq('metro_area', region)
+      let q = sb
+        .from('businesses')
+        .select('*')
+        .eq('is_active', true)
+        .eq('metro_area', region)
 
-    if (!isAdmin) {
+      if (!isAdmin) {
+        q = q
+          .eq('approved', true)
+          .neq('source', 'Google Places API (New)')
+      }
+
+      if (cat !== '전체') {
+        q = q.eq('category_main', cat)
+      }
+
       q = q
-        .eq('approved', true)
-        .neq('source', 'Google Places API (New)')
-    }
+        .order('is_vip', { ascending: false })
+        .order('rating', { ascending: false, nullsFirst: false })
+        .order('review_count', { ascending: false, nullsFirst: false })
 
-    if (cat !== '전체') {
-      q = q.eq('category_main', cat)
-    }
+      const { data, error } = await q.range(0, (hasSearch ? SEARCH_FETCH_LIMIT : INITIAL_BUSINESS_LOAD) - 1)
 
-    q = q
-      .order('is_vip', { ascending: false })
-      .order('rating', { ascending: false, nullsFirst: false })
-      .order('review_count', { ascending: false, nullsFirst: false })
+      if (error) {
+        console.error('business load error:', error)
+        setBiz([])
+        setHasMore(false)
+        return
+      }
 
-    const { data, error } = await q.range(0, (hasSearch ? SEARCH_FETCH_LIMIT : INITIAL_BUSINESS_LOAD) - 1)
+      const sourceList = data || []
 
-    if (error) {
-      console.error('business load error:', error)
+      let filtered = hasSearch
+        ? sourceList
+        : sourceList.filter((business) => matchesCategory(business, cat))
+
+      if (hasSearch) {
+        filtered = filtered
+          .map((business) => ({
+            business,
+            score: getSearchScore(business, normalizedSearch),
+          }))
+          .filter((item) => item.score > 0)
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score
+
+            const aVip = a.business?.is_vip ? 1 : 0
+            const bVip = b.business?.is_vip ? 1 : 0
+            if (bVip !== aVip) return bVip - aVip
+
+            if (sort === 'review_count') {
+              const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
+              if (byReviewCount !== 0) return byReviewCount
+
+              const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
+              if (byRating !== 0) return byRating
+            } else if (sort === 'name_en') {
+              const byName = getSortableName(a.business).localeCompare(
+                getSortableName(b.business),
+                'ko'
+              )
+              if (byName !== 0) return byName
+            } else {
+              const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
+              if (byRating !== 0) return byRating
+
+              const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
+              if (byReviewCount !== 0) return byReviewCount
+            }
+
+            return getSortableName(a.business).localeCompare(getSortableName(b.business), 'ko')
+          })
+          .map((item) => item.business)
+
+        setSearchResultCount(filtered.length)
+      } else {
+        filtered = applyBusinessSort(filtered, sort)
+      }
+
+      setBiz(filtered)
+      setVisibleCount(INITIAL_BUSINESS_LOAD)
+      setHasMore(filtered.length > INITIAL_BUSINESS_LOAD)
+    } catch (error) {
+      console.error('business load unexpected error:', error)
       setBiz([])
       setHasMore(false)
+    } finally {
       setLoading(false)
-      return
     }
-
-    const sourceList = data || []
-
-    let filtered = hasSearch
-      ? sourceList
-      : sourceList.filter((business) => matchesCategory(business, cat))
-
-    if (hasSearch) {
-      filtered = filtered
-        .map((business) => ({
-          business,
-          score: getSearchScore(business, normalizedSearch),
-        }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score
-
-          const aVip = a.business?.is_vip ? 1 : 0
-          const bVip = b.business?.is_vip ? 1 : 0
-          if (bVip !== aVip) return bVip - aVip
-
-          if (sort === 'review_count') {
-            const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
-            if (byReviewCount !== 0) return byReviewCount
-
-            const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
-            if (byRating !== 0) return byRating
-          } else if (sort === 'name_en') {
-            const byName = getSortableName(a.business).localeCompare(
-              getSortableName(b.business),
-              'ko'
-            )
-            if (byName !== 0) return byName
-          } else {
-            const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
-            if (byRating !== 0) return byRating
-
-            const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
-            if (byReviewCount !== 0) return byReviewCount
-          }
-
-          return getSortableName(a.business).localeCompare(getSortableName(b.business), 'ko')
-        })
-        .map((item) => item.business)
-
-      setSearchResultCount(filtered.length)
-    } else {
-      filtered = applyBusinessSort(filtered, sort)
-    }
-
-    setBiz(filtered)
-    setVisibleCount(INITIAL_BUSINESS_LOAD)
-    setHasMore(filtered.length > INITIAL_BUSINESS_LOAD)
-    setLoading(false)
   }, [cat, search, sort, region, isAdmin])
 
   const handleLoadMore = useCallback(async () => {
@@ -619,6 +625,7 @@ export default function Home() {
     if (sort && sort !== 'rating') params.set('sort', sort)
 
     const qs = params.toString()
+    const currentQs = searchParams.toString()
     const nextUrl = qs ? `/?${qs}` : '/'
 
     if (!hasWrittenUrl.current) {
@@ -626,8 +633,10 @@ export default function Home() {
       return
     }
 
+    if (qs === currentQs) return
+
     router.replace(nextUrl, { scroll: false })
-  }, [isUrlReady, region, search, cat, sort, router])
+  }, [isUrlReady, region, search, cat, sort, router, searchParams])
 
   useEffect(() => {
     if (!isUrlReady) return
