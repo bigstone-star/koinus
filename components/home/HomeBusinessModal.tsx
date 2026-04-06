@@ -9,7 +9,10 @@ export default function HomeBusinessModal({
 }) {
   if (!sel) return null
 
+  // 🔥 안전 처리
   const name = sel?.name_kr || sel?.name_en || '업소'
+  const categoryMain = sel?.category_main || ''
+  const categorySub = sel?.category_sub || ''
   const address = sel?.address || ''
   const phone = sel?.phone || ''
   const website = sel?.website || ''
@@ -18,38 +21,59 @@ export default function HomeBusinessModal({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        zIndex: 9999,
-      }}
+      className="fixed inset-0 z-[9999] bg-black/60"
       onClick={(e:any)=>{ if(e.target===e.currentTarget) onClose() }}
     >
-      <div className="bg-white p-5 rounded-t-2xl absolute bottom-0 w-full max-h-[90vh] overflow-y-auto">
-        <div className="font-bold text-lg">{name}</div>
+      <div className="absolute bottom-0 w-full bg-white rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
 
-        <div className="text-sm text-slate-400">
-          {sel?.category_main} {sel?.category_sub}
+        {/* 제목 */}
+        <div className="text-lg font-bold">
+          {name}
         </div>
 
+        {/* 카테고리 */}
+        <div className="text-sm text-gray-500">
+          {categoryMain} {categorySub}
+        </div>
+
+        {/* 평점 */}
         {rating > 0 && (
-          <div className="mt-2">
+          <div className="mt-2 text-sm">
             ⭐ {rating} ({reviewCount})
           </div>
         )}
 
-        {address && <div className="mt-2">{address}</div>}
+        {/* 주소 */}
+        {address && (
+          <div className="mt-3 text-sm">
+            {address}
+          </div>
+        )}
 
-        {phone && <div className="mt-2">📞 {phone}</div>}
+        {/* 전화 */}
+        {phone && (
+          <div className="mt-2 text-sm">
+            📞 {phone}
+          </div>
+        )}
 
+        {/* 웹사이트 */}
         {website && (
-          <a href={website} target="_blank" className="text-blue-500 mt-2 block">
+          <a
+            href={website}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 text-blue-500 text-sm block"
+          >
             홈페이지
           </a>
         )}
 
-        <button onClick={onClose} className="mt-4">
+        {/* 닫기 */}
+        <button
+          onClick={onClose}
+          className="mt-6 w-full py-2 rounded-lg bg-gray-100"
+        >
           닫기
         </button>
       </div>
