@@ -302,7 +302,7 @@ export default function Home() {
     setSections(data as HomeSection[])
   }, [])
 
-    const loadVipBusinesses = useCallback(async () => {
+  const loadVipBusinesses = useCallback(async () => {
     let q = sb
       .from('businesses')
       .select('*')
@@ -442,12 +442,10 @@ export default function Home() {
           if (bVip !== aVip) return bVip - aVip
 
           if (sort === 'review_count') {
-            const byReviewCount =
-              Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
+            const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
             if (byReviewCount !== 0) return byReviewCount
 
-            const byRating =
-              Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
+            const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
             if (byRating !== 0) return byRating
           } else if (sort === 'name_en') {
             const byName = getSortableName(a.business).localeCompare(
@@ -456,12 +454,10 @@ export default function Home() {
             )
             if (byName !== 0) return byName
           } else {
-            const byRating =
-              Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
+            const byRating = Number(b.business?.rating || 0) - Number(a.business?.rating || 0)
             if (byRating !== 0) return byRating
 
-            const byReviewCount =
-              Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
+            const byReviewCount = Number(b.business?.review_count || 0) - Number(a.business?.review_count || 0)
             if (byReviewCount !== 0) return byReviewCount
           }
 
@@ -573,8 +569,6 @@ export default function Home() {
   }, [loadAuthUser, loadSections])
 
   useEffect(() => {
-    if (hasInitializedFromUrl.current) return
-
     const urlRegion = searchParams.get('region')
     const urlSearch = searchParams.get('search')
     const urlCat = searchParams.get('cat')
@@ -612,7 +606,7 @@ export default function Home() {
   }, [region])
 
   useEffect(() => {
-    if (!hasInitializedFromUrl.current) return
+    if (!isUrlReady) return
 
     const params = new URLSearchParams()
 
@@ -630,15 +624,15 @@ export default function Home() {
     }
 
     router.replace(nextUrl, { scroll: false })
-  }, [region, search, cat, sort, router])
+  }, [isUrlReady, region, search, cat, sort, router])
 
   useEffect(() => {
-  if (!isUrlReady) return
+    if (!isUrlReady) return
 
-  loadCommunityPreview()
-  loadVipBusinesses()
-  load()
-}, [isUrlReady, loadCommunityPreview, loadVipBusinesses, load])
+    loadCommunityPreview()
+    loadVipBusinesses()
+    load()
+  }, [isUrlReady, loadCommunityPreview, loadVipBusinesses, load])
 
   const loadReviews = useCallback(
     async (businessId: string) => {
@@ -837,7 +831,7 @@ export default function Home() {
     loadRelatedCommunityPosts(b.id)
   }
 
-  const sectionMap: Record<string, React.ReactNode> = {
+  const sectionMap: Record<string, JSX.Element> = {
     community_latest: (
       <HomeCommunityLatest
         posts={communityPosts}
@@ -905,7 +899,7 @@ export default function Home() {
             ))}
           </select>
 
-                    <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
+          <div className="flex-1 border border-slate-200 rounded-lg flex items-center px-3 gap-2 bg-white">
             <span className="text-slate-300">🔍</span>
             <input
               ref={searchInputRef}
