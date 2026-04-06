@@ -40,6 +40,10 @@ export default function HomeBusinessList({
   onOpenBusiness,
   isAdmin,
   onToggleApproved,
+  approvalSavingId,
+  hasMore,
+  onLoadMore,
+  isLoadingMore,
 }: {
   biz: any[]
   cats: Category[]
@@ -47,7 +51,11 @@ export default function HomeBusinessList({
   onToggleFav: (id: string, e: any) => void
   onOpenBusiness: (b: any) => void
   isAdmin?: boolean
-  onToggleApproved?: (id: string, current: boolean) => void
+  onToggleApproved?: (business: any) => void
+  approvalSavingId?: string | null
+  hasMore?: boolean
+  onLoadMore?: () => void
+  isLoadingMore?: boolean
 }) {
   if (!Array.isArray(biz) || biz.length === 0) {
     return <div className="text-center py-20 text-slate-400">검색 결과가 없습니다</div>
@@ -67,6 +75,7 @@ export default function HomeBusinessList({
         const phone = b?.phone || ''
         const approved = !!b?.approved
         const isVip = !!b?.is_vip
+        const isApprovalSaving = approvalSavingId === id
         const categoryBg = CAT_BG[categoryMain] || 'bg-slate-100'
 
         return (
@@ -99,15 +108,16 @@ export default function HomeBusinessList({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  onToggleApproved?.(id, approved)
+                  onToggleApproved?.(b)
                 }}
-                className={`text-xs px-2 py-1 rounded ${
+                disabled={isApprovalSaving}
+                className={`text-xs px-2 py-1 rounded disabled:opacity-60 ${
                   approved
                     ? 'bg-green-100 text-green-700'
                     : 'bg-gray-200 text-gray-600'
                 }`}
               >
-                {approved ? '승인' : '미승인'}
+                {isApprovalSaving ? '저장중...' : approved ? '승인' : '미승인'}
               </button>
             )}
 
@@ -117,6 +127,18 @@ export default function HomeBusinessList({
           </div>
         )
       })}
+
+      {hasMore && onLoadMore && (
+        <div className="pt-3 flex justify-center">
+          <button
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-slate-700 disabled:opacity-60"
+          >
+            {isLoadingMore ? '불러오는 중...' : '더 보기'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
