@@ -307,7 +307,6 @@ export default function Home() {
     if (!isAdmin) {
       q = q
         .eq('approved', true)
-        .neq('source', 'Google Places API (New)')
     }
 
     if (cat !== '전체') {
@@ -389,7 +388,6 @@ export default function Home() {
     if (!isAdmin) {
       q = q
         .eq('approved', true)
-        .neq('source', 'Google Places API (New)')
     }
 
     if (cat !== '전체') {
@@ -619,7 +617,6 @@ export default function Home() {
       if (!isAdmin) {
         totalQuery = totalQuery
           .eq('approved', true)
-          .neq('source', 'Google Places API (New)')
       }
 
       const { count: total, error: totalError } = await totalQuery
@@ -653,7 +650,6 @@ export default function Home() {
           if (!isAdmin) {
             countQuery = countQuery
                 .eq('approved', true)
-                .neq('source', 'Google Places API (New)')
           }
 
           const { count, error } = await countQuery
